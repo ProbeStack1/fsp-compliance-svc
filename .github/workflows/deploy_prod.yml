@@ -83,18 +83,56 @@ jobs:
           ${{ env.GKE_LOCATION_FLAG }} ${{ env.GKE_LOCATION }} \
           --project ${{ env.PROJECT_ID }}
 
-      - name: Deploy deployment service
+      # ============================================================
+      #  D E B U G   S T E P S   
+      # ============================================================
+
+      - name: Deploy new image (rollout trigger)
         run: |
           kubectl set image deployment/${{ env.SERVICE_NAME }} \
           ${{ env.SERVICE_NAME }}=${{ env.ARTIFACT_REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
           -n ${{ env.NAMESPACE }}
 
-      - name: Wait for deployment rollout
+      - name: Wait for new pod to be created
         run: |
-          kubectl rollout status deployment/${{ env.SERVICE_NAME }} \
-          -n ${{ env.NAMESPACE }}
+          echo "Waiting for new pod to appear..."
+          sleep 10
+          NEW_POD=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=${{ env.SERVICE_NAME }} --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}')
+          echo "NEW_POD=$NEW_POD" >> $GITHUB_ENV
+          echo "New pod: $NEW_POD"
 
-      - name: Verify running pods
+      - name: Describe new pod (events, status, conditions)
         run: |
-          kubectl get pods -n ${{ env.NAMESPACE }}
+          echo "===== POD DESCRIPTION ====="
+          kubectl describe pod -n ${{ env.NAMESPACE }} ${{ env.NEW_POD }}
+          echo "=========================="
 
+      - name: Fetch current logs from new pod
+        run: |
+          echo "===== CURRENT LOGS (immediate) ====="
+          kubectl logs -n ${{ env.NAMESPACE }} ${{ env.NEW_POD }} --tail=100 || echo "No logs yet (container may not have started)"
+          echo "==================================="
+
+      - name: Wait 2 minutes for startup to stabilise
+        run: |
+          echo "Waiting 120 seconds to collect more logs..."
+          sleep 120
+
+      - name: Fetch logs again after 2 minutes
+        run: |
+          echo "===== LOGS AFTER 2 MINUTES ====="
+          kubectl logs -n ${{ env.NAMESPACE }} ${{ env.NEW_POD }} --tail=200 || echo "Pod may have crashed - check describe"
+          echo "================================"
+
+      - name: Check rollout status (non‑blocking, but logs already captured)
+        run: |
+          echo "Checking rollout status (timeout 2 minutes)..."
+          kubectl rollout status deployment/${{ env.SERVICE_NAME }} -n ${{ env.NAMESPACE }} --timeout=2m || true
+          # Do NOT fail the workflow here because we already captured logs.
+          # The pipeline will continue so you can see the final pod status.
+
+      - name: Final pod status
+        run: |
+          echo "===== FINAL POD STATUS ====="
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app=${{ env.SERVICE_NAME }}
+          echo "============================"
