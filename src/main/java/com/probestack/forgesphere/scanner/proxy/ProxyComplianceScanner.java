@@ -19,10 +19,13 @@ import org.springframework.stereotype.Service;
 public class ProxyComplianceScanner {
 
     private final MicroserviceSourceResolver sourceResolver;
+    private final com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner apigeeProbeRunner;
     private final Map<String, Function<MicroserviceScanContext, RuleEvaluation>> checks;
 
-    public ProxyComplianceScanner(MicroserviceSourceResolver sourceResolver) {
+    public ProxyComplianceScanner(MicroserviceSourceResolver sourceResolver,
+                                  com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner apigeeProbeRunner) {
         this.sourceResolver = sourceResolver;
+        this.apigeeProbeRunner = apigeeProbeRunner;
         this.checks = Map.ofEntries(
                 entry("PROXY_BUNDLE_STRUCTURE", path("apiproxy|kong\\.(ya?ml|json)|deck\\.(ya?ml|json)")),
                 entry("PROXY_ENDPOINT_DOCUMENTATION", this::documentation),
@@ -58,11 +61,17 @@ public class ProxyComplianceScanner {
     }
 
     public List<ScanResult> scan(ComplianceScanDocument scan, List<ComplianceRuleDocument> rules) {
+        // For APIGEE proxies, run real HTTP probes against the deployed runtime
+        // for each rule that is probe-able from outside (auth, rate-limit,
+        // headers, CORS, TLS, etc.). Rules that need the actual proxy bundle
+        // (LOG_*, GEN_*, PROXY_BUNDLE_STRUCTURE etc.) are evaluated via the
+        // metadata path with a clear "(bundle not available)" note.
+        if (com.probestack.forgesphere.model.AssetType.APIGEE.equals(scan.getAssetType())) {
+            return runApigeeProbes(scan, rules);
+        }
+
         SourceResolution sourceResolution = sourceResolver.resolve(scan.getScanId(), scan.getSourceType(), scan.getSource());
         if (!sourceResolution.resolved()) {
-            // Bundle could not be fetched (common for Apigee proxies when the
-            // wrapper export endpoint is not exposed). Fall back to metadata-only
-            // evaluation so the user still gets an actionable report.
             return rules.stream()
                     .map(rule -> metadataOnlyResult(rule, sourceResolution.message()))
                     .toList();
@@ -72,6 +81,42 @@ public class ProxyComplianceScanner {
         return rules.stream()
                 .map(rule -> evaluate(rule, context))
                 .toList();
+    }
+
+    /** Probe-based evaluation for APIGEE compliance rules. */
+    private List<ScanResult> runApigeeProbes(ComplianceScanDocument scan, List<ComplianceRuleDocument> rules) {
+        String target = "https://forgesphere.probestack.io/" + (scan.getAssetName() != null ? scan.getAssetName() : "unknown");
+        // Pre-compute the few probes we can reuse across multiple rules
+        com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner.ProbeResult miss = apigeeProbeRunner.probeMissingAuth(target);
+        com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner.ProbeResult headers = apigeeProbeRunner.probeSecurityMisconfig(target);
+        com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner.ProbeResult rate = apigeeProbeRunner.probeInsecureDesign(target);
+        com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner.ProbeResult https = apigeeProbeRunner.probeIntegrityFailures(target);
+
+        java.util.List<ScanResult> out = new java.util.ArrayList<>();
+        for (ComplianceRuleDocument rule : rules) {
+            ScanResult sr = new ScanResult();
+            sr.setRuleId(rule.getRuleId());
+            sr.setRuleName(rule.getRuleName());
+            sr.setRuleType(rule.getRuleType());
+            sr.setSeverity(rule.getSeverity());
+            com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner.ProbeResult mapped = null;
+            String code = rule.getRuleId() == null ? "" : rule.getRuleId();
+            if (code.endsWith("_SEC_003")) mapped = miss;
+            else if (code.endsWith("_SEC_006") || code.endsWith("_PERF_001")) mapped = rate;
+            else if (code.endsWith("_SEC_001") || code.endsWith("_SEC_007")) mapped = https;
+            else if (code.contains("_SEC_") || code.contains("_HEALTH_")) mapped = headers;
+
+            if (mapped != null) {
+                sr.setResult(mapped.passed ? ScanResultStatus.PASSED : ScanResultStatus.FAILED);
+                sr.setMessage(mapped.toMessageJson());
+            } else {
+                // Bundle-only rule \u2014 fall back to metadata note.
+                ScanResult m = metadataOnlyResult(rule, "Rule needs proxy bundle inspection \u2014 probe-based evaluation not applicable.");
+                sr = m;
+            }
+            out.add(sr);
+        }
+        return out;
     }
 
     private ScanResult metadataOnlyResult(ComplianceRuleDocument rule, String reason) {

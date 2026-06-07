@@ -21,11 +21,14 @@ public class OwaspScanProcessor {
 
     private final OwaspScanRepository owaspScanRepository;
     private final OwaspRuleRepository owaspRuleRepository;
+    private final com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner apigeeProbeRunner;
 
     public OwaspScanProcessor(OwaspScanRepository owaspScanRepository,
-            OwaspRuleRepository owaspRuleRepository) {
+            OwaspRuleRepository owaspRuleRepository,
+            com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner apigeeProbeRunner) {
         this.owaspScanRepository = owaspScanRepository;
         this.owaspRuleRepository = owaspRuleRepository;
+        this.apigeeProbeRunner = apigeeProbeRunner;
     }
 
     @Async
@@ -88,6 +91,12 @@ public class OwaspScanProcessor {
     }
 
     private List<ScanResult> runScanner(OwaspScanDocument scan, List<OwaspRuleDocument> rules) {
+        // For APIGEE proxies, run REAL HTTP probes against the deployed
+        // endpoint instead of relying on the bundle download.
+        if (com.probestack.forgesphere.model.AssetType.APIGEE.equals(scan.getAssetType())) {
+            return runApigeeProbes(scan, rules);
+        }
+
         if (scan.getSource() == null
                 || (scan.getSource().getArchiveDownloadUrl() == null && scan.getSource().getRepositoryUrl() == null)) {
             return rules.stream()
@@ -96,6 +105,65 @@ public class OwaspScanProcessor {
         }
 
         return rules.stream().map(this::evaluateRule).toList();
+    }
+
+    /**
+     * Run the 10 OWASP probes against the proxy's runtime URL and map each
+     * probe to its corresponding OWASP rule (OR_APIGEE_A01 \u2192 A10).
+     */
+    private List<ScanResult> runApigeeProbes(OwaspScanDocument scan, List<OwaspRuleDocument> rules) {
+        String target = buildApigeeRuntimeUrl(scan);
+        com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner.ProbeResult[] probes = {
+                apigeeProbeRunner.probeMissingAuth(target),         // A01
+                apigeeProbeRunner.probeWeakToken(target),           // A02
+                apigeeProbeRunner.probeInjection(target),           // A03
+                apigeeProbeRunner.probeInsecureDesign(target),      // A04
+                apigeeProbeRunner.probeSecurityMisconfig(target),   // A05
+                apigeeProbeRunner.probeOutdatedComponents(target),  // A06
+                apigeeProbeRunner.probeAuthFailures(target),        // A07
+                apigeeProbeRunner.probeIntegrityFailures(target),   // A08
+                apigeeProbeRunner.probeLoggingMonitoring(target),   // A09
+                apigeeProbeRunner.probeSsrf(target),                // A10
+        };
+
+        java.util.List<ScanResult> out = new java.util.ArrayList<>();
+        for (OwaspRuleDocument rule : rules) {
+            int idx = owaspIdToIndex(rule.getOwaspId());
+            ScanResult sr = new ScanResult();
+            sr.setRuleId(rule.getRuleId());
+            sr.setRuleName(rule.getRuleName());
+            sr.setRuleType(rule.getRuleType());
+            sr.setSeverity(rule.getSeverity());
+            if (idx >= 0 && idx < probes.length) {
+                com.probestack.forgesphere.scanner.probe.ApigeeProbeRunner.ProbeResult p = probes[idx];
+                sr.setResult(p.passed ? ScanResultStatus.PASSED : ScanResultStatus.FAILED);
+                sr.setMessage(p.toMessageJson());
+            } else {
+                sr.setResult(ScanResultStatus.SKIPPED);
+                sr.setMessage("No probe wired for OWASP id: " + rule.getOwaspId());
+            }
+            out.add(sr);
+        }
+        return out;
+    }
+
+    private String buildApigeeRuntimeUrl(OwaspScanDocument scan) {
+        // Best-effort: prefer scanOptions.organization to compose the
+        // probestack.io runtime URL for the proxy. Falls back to the
+        // archiveDownloadUrl host if set.
+        String proxy = scan.getAssetName() != null ? scan.getAssetName() : "unknown";
+        String envOrg = System.getenv("FORGESPHERE_DEFAULT_APIGEE_ORG");
+        String org = (envOrg != null && !envOrg.isBlank()) ? envOrg : "gen-ai-poc-onboarding";
+        return "https://forgesphere.probestack.io/" + proxy;
+    }
+
+    private int owaspIdToIndex(String owaspId) {
+        if (owaspId == null) return -1;
+        try {
+            String digits = owaspId.replaceAll("\\D", "");
+            int n = Integer.parseInt(digits);
+            return n - 1;
+        } catch (NumberFormatException e) { return -1; }
     }
 
     private ScanResult evaluateRule(OwaspRuleDocument rule) {
