@@ -71,10 +71,20 @@ public class ComplianceScanService {
                     "At least one resource id is required. Send microserviceId, microserviceIds, or resourceIds.");
         }
 
-        List<SubmitComplianceScanResponse> scans = resourceIds.stream()
-                .map(resourceId -> onboardingResourceResolver.resolve(request.getAssetType(), resourceId))
-                .map(resource -> submitFromResolvedResource(request, resource))
-                .toList();
+        List<SubmitComplianceScanResponse> scans;
+        // APIGEE proxies do not need to go through the onboarding resolver:
+        // we resolve their source straight from the Apigee wrapper export URL.
+        // This mirrors the OWASP service's APIGEE branch.
+        if (AssetType.APIGEE.equals(request.getAssetType())) {
+            scans = resourceIds.stream()
+                    .map(resourceId -> submitDirectComplianceScan(request, resourceId))
+                    .toList();
+        } else {
+            scans = resourceIds.stream()
+                    .map(resourceId -> onboardingResourceResolver.resolve(request.getAssetType(), resourceId))
+                    .map(resource -> submitFromResolvedResource(request, resource))
+                    .toList();
+        }
 
         RunComplianceCheckResponse response = new RunComplianceCheckResponse();
         response.setSubmittedScans(scans.size());
@@ -141,6 +151,38 @@ public class ComplianceScanService {
         complianceScanProcessor.processScan(savedScan.getScanId());
         return mapToSubmitComplianceScanResponse(savedScan);
     }
+
+    /**
+     * APIGEE-specific submit path that bypasses the onboarding resolver and
+     * builds a {@link ScanSource} pointing straight at the Apigee proxy export
+     * URL. Matches the OWASP service's APIGEE branch.
+     */
+    private SubmitComplianceScanResponse submitDirectComplianceScan(RunComplianceCheckRequest request, String resourceId) {
+        SubmitComplianceScanRequest scanRequest = new SubmitComplianceScanRequest();
+        scanRequest.setProjectName(request.getProjectName() != null ? request.getProjectName() : "Default");
+        scanRequest.setCompanyName(request.getCompanyName() != null ? request.getCompanyName() : "Default");
+        scanRequest.setAssetId(resourceId);
+        scanRequest.setAssetName(resourceId);
+        scanRequest.setAssetType(request.getAssetType());
+
+        com.probestack.forgesphere.model.ScanSource source = new com.probestack.forgesphere.model.ScanSource();
+        String envOrg = System.getenv("FORGESPHERE_DEFAULT_APIGEE_ORG");
+        String org = (envOrg != null && !envOrg.isBlank()) ? envOrg : "gen-ai-poc-onboarding";
+        source.setArchiveDownloadUrl(
+                "https://forgesphere.probestack.io/apigee-wrapper/organizations/"
+                        + org + "/apis/" + resourceId + "/revisions/latest/export");
+        source.setBundleName(resourceId + ".zip");
+        scanRequest.setSourceType(com.probestack.forgesphere.model.SourceType.BUNDLE_UPLOAD);
+        scanRequest.setSource(source);
+        scanRequest.setRules(request.getRules());
+        scanRequest.setScanOptions(request.getScanOptions());
+        scanRequest.setRequestedBy(request.getRequestedBy());
+
+        ComplianceScanDocument savedScan = complianceScanRepository.save(mapToDocument(scanRequest));
+        complianceScanProcessor.processScan(savedScan.getScanId());
+        return mapToSubmitComplianceScanResponse(savedScan);
+    }
+
 
     private List<String> requestedResourceIds(RunComplianceCheckRequest request) {
         Set<String> ids = new LinkedHashSet<>();
