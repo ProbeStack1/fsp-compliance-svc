@@ -49,6 +49,15 @@ public class OwaspScanDocument {
     private String createdBy;
     private Instant updatedDate;
     private String updatedBy;
+    private String deployedEndpointUrl;
+
+    public String getDeployedEndpointUrl() {
+        return deployedEndpointUrl;
+    }
+
+    public void setDeployedEndpointUrl(String deployedEndpointUrl) {
+        this.deployedEndpointUrl = deployedEndpointUrl;
+    }
 
     public String getId() {
         return id;

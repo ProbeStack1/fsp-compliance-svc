@@ -41,6 +41,15 @@ public class RunOwaspCheckRequest {
 
     @JsonProperty("requestedBy")
     private String requestedBy;
+        private String deployedEndpointUrl;
+
+    public String getDeployedEndpointUrl() {
+        return deployedEndpointUrl;
+    }
+
+    public void setDeployedEndpointUrl(String deployedEndpointUrl) {
+        this.deployedEndpointUrl = deployedEndpointUrl;
+    }
 
     public AssetType getAssetType() {
         return assetType;

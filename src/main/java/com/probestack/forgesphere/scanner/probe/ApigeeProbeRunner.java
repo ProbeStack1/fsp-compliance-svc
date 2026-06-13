@@ -18,15 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/**
- * Runs the 10 OWASP Top 10 (2021) probes against a deployed Apigee proxy
- * (or any plain HTTP/HTTPS endpoint). Each probe returns a {@link ProbeResult}
- * with the rich diagnostic fields the UI expects ("what it tests", "how it
- * works", evidence, duration, recommended fix, endpoints tested).
- *
- * The runner is intentionally side-effect free, fully self-contained, and
- * built on {@code java.net.http.HttpClient} so no extra deps are required.
- */
 @Component
 public class ApigeeProbeRunner {
 
@@ -54,7 +45,6 @@ public class ApigeeProbeRunner {
         return results;
     }
 
-    /** A01:2023 — Broken Object Level Authorization / missing auth enforcement */
     public ProbeResult probeMissingAuth(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -65,22 +55,20 @@ public class ApigeeProbeRunner {
                     .severity("HIGH")
                     .passed(pass)
                     .whatItTests("Endpoint should reject anonymous requests with 401/403.")
-                    .howItWorks("Sends a GET with no Authorization header. Expects HTTP 401 or 403. A 200 means the endpoint is publicly readable.")
+                    .howItWorks("Sends a GET with no Authorization header. Expects 401 or 403. A 200 means the endpoint is publicly readable.")
                     .endpoints(List.of(target))
-                    .evidence(pass
-                            ? "Correctly rejected with HTTP " + r.statusCode()
-                            : "No-auth request returned HTTP " + r.statusCode())
+                    .evidence(pass ? "Correctly rejected with HTTP " + r.statusCode()
+                                   : "No-auth request returned HTTP " + r.statusCode())
                     .recommended("Require authentication on sensitive endpoints. Return 401 with WWW-Authenticate header.")
                     .durationMs(System.currentTimeMillis() - t0)
                     .build();
         } catch (Exception e) {
             return errorResult("Missing Auth enforcement", "HIGH", target, t0, e,
                     "Endpoint should reject anonymous requests with 401/403.",
-                    "Sends a GET with no Authorization header. Expects HTTP 401 or 403.");
+                    "Sends a GET with no Authorization header. Expects 401 or 403.");
         }
     }
 
-    /** A02:2023 — Broken Authentication — forged/invalid bearer rejection */
     public ProbeResult probeWeakToken(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -104,7 +92,6 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A03:2023 — Injection (SQL + NoSQL combined) */
     public ProbeResult probeInjection(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -133,7 +120,6 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A04:2023 — Insecure Design (rate limit) */
     public ProbeResult probeInsecureDesign(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -165,7 +151,6 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A05:2023 — Security Misconfiguration — security headers */
     public ProbeResult probeSecurityMisconfig(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -188,8 +173,7 @@ public class ApigeeProbeRunner {
                     .whatItTests("Verifies the response carries baseline security headers (HSTS, CSP, X-Content-Type-Options, Referrer-Policy, X-Frame-Options).")
                     .howItWorks("Issues a GET and flags missing values for the required headers.")
                     .endpoints(List.of(target))
-                    .evidence(pass ? "All required headers present"
-                            : "Missing: " + String.join(", ", missing))
+                    .evidence(pass ? "All required headers present" : "Missing: " + String.join(", ", missing))
                     .recommended("Add Strict-Transport-Security, Content-Security-Policy, X-Content-Type-Options: nosniff, X-Frame-Options: DENY, and a sane Referrer-Policy at the proxy/LB.")
                     .durationMs(System.currentTimeMillis() - t0)
                     .build();
@@ -200,7 +184,6 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A06:2023 — Vulnerable & outdated components */
     public ProbeResult probeOutdatedComponents(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -238,11 +221,9 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A07:2023 — Identification & Authentication failures */
     public ProbeResult probeAuthFailures(String target) {
         long t0 = System.currentTimeMillis();
         try {
-            // Try common credentials on a login-like path if available
             String loginUrl = target;
             HttpResponse<String> r = post(loginUrl, "{\"username\":\"admin\",\"password\":\"admin\"}",
                     Map.of("Content-Type", "application/json"));
@@ -257,7 +238,7 @@ public class ApigeeProbeRunner {
                     .howItWorks("POSTs {username: admin, password: admin} to the target. Expects 4xx, never a 200 containing a token/session.")
                     .endpoints(List.of(loginUrl))
                     .evidence(weak ? "Login with admin/admin returned HTTP 200 with token-like body"
-                            : "Default credentials rejected with HTTP " + r.statusCode())
+                                   : "Default credentials rejected with HTTP " + r.statusCode())
                     .recommended("Disable / force-rotate default accounts. Require strong password policy + MFA.")
                     .durationMs(System.currentTimeMillis() - t0)
                     .build();
@@ -268,7 +249,6 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A08:2023 — Software & Data Integrity failures */
     public ProbeResult probeIntegrityFailures(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -276,7 +256,7 @@ public class ApigeeProbeRunner {
             HttpResponse<String> r = get(httpVariant, Map.of());
             String location = r.headers().firstValue("location").orElse("");
             boolean redirectToHttps = (r.statusCode() == 301 || r.statusCode() == 308) && location.startsWith("https://");
-            boolean pass = redirectToHttps || target.startsWith("https://"); // HTTPS already enforced
+            boolean pass = redirectToHttps || target.startsWith("https://");
             return ProbeResult.builder()
                     .name("HTTPS / integrity enforcement")
                     .severity(pass ? "INFO" : "MEDIUM")
@@ -284,9 +264,8 @@ public class ApigeeProbeRunner {
                     .whatItTests("Plain-HTTP variant of the endpoint should redirect to HTTPS (301/308).")
                     .howItWorks("If target is https://, retries with http:// scheme. Expects 301/308 to https://.")
                     .endpoints(List.of(httpVariant))
-                    .evidence(redirectToHttps
-                            ? "HTTP redirected to HTTPS via " + r.statusCode()
-                            : "HTTP variant returned " + r.statusCode() + " Location=" + (location.isEmpty() ? "(none)" : location))
+                    .evidence(redirectToHttps ? "HTTP redirected to HTTPS via " + r.statusCode()
+                                               : "HTTP variant returned " + r.statusCode() + " Location=" + (location.isEmpty() ? "(none)" : location))
                     .recommended("Enable HSTS and force-redirect HTTP→HTTPS at the LB/ingress.")
                     .durationMs(System.currentTimeMillis() - t0)
                     .build();
@@ -297,11 +276,9 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A09:2023 — Security logging & monitoring */
     public ProbeResult probeLoggingMonitoring(String target) {
         long t0 = System.currentTimeMillis();
         try {
-            // Trigger an obvious bad request and look for a clean error envelope
             HttpResponse<String> r = get(target + "/__nonexistent_path_for_probe__", Map.of());
             String body = r.body() == null ? "" : r.body();
             boolean leaksStack = body.contains("java.lang.") || body.contains("at org.")
@@ -314,9 +291,8 @@ public class ApigeeProbeRunner {
                     .whatItTests("Error responses should not leak stack traces or internal exception class names.")
                     .howItWorks("Sends a request to a known-bad path and inspects the response body for stack-trace markers (java.lang., 'at org.', 'Exception').")
                     .endpoints(List.of(target + "/__nonexistent_path_for_probe__"))
-                    .evidence(pass
-                            ? "Error response returned a clean envelope without internal detail"
-                            : "Response body leaked internal exception markers")
+                    .evidence(pass ? "Error response returned a clean envelope without internal detail"
+                                   : "Response body leaked internal exception markers")
                     .recommended("Catch + map exceptions to RFC-7807 ProblemDetails. Never echo stack traces in production responses.")
                     .durationMs(System.currentTimeMillis() - t0)
                     .build();
@@ -327,7 +303,6 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /** A10:2023 — Server-Side Request Forgery */
     public ProbeResult probeSsrf(String target) {
         long t0 = System.currentTimeMillis();
         try {
@@ -344,7 +319,7 @@ public class ApigeeProbeRunner {
                     .howItWorks("Appends ?url=http://169.254.169.254/latest/meta-data/ and inspects response. A 200 with cloud-metadata markers indicates SSRF.")
                     .endpoints(List.of(ssrfUrl))
                     .evidence(leaked ? "Response body contained cloud-metadata markers"
-                            : "Endpoint did not fetch attacker-supplied URL (HTTP " + r.statusCode() + ")")
+                                     : "Endpoint did not fetch attacker-supplied URL (HTTP " + r.statusCode() + ")")
                     .recommended("Validate caller-supplied URLs against an allow-list. Block private/link-local IP ranges (RFC 1918, 169.254/16).")
                     .durationMs(System.currentTimeMillis() - t0)
                     .build();
@@ -355,8 +330,9 @@ public class ApigeeProbeRunner {
         }
     }
 
-    /* ───────────────────────── helpers ───────────────────────── */
-
+    // ------------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------------
     private HttpResponse<String> get(String url, Map<String, String> headers) throws Exception {
         HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url)).timeout(TIMEOUT).GET();
         headers.forEach(b::header);
@@ -384,8 +360,9 @@ public class ApigeeProbeRunner {
                 .build();
     }
 
-    /* ───────────────────────── ProbeResult DTO ───────────────────────── */
-
+    // ------------------------------------------------------------------------
+    // ProbeResult DTO
+    // ------------------------------------------------------------------------
     public static final class ProbeResult {
         public String name;
         public String severity;
@@ -397,6 +374,14 @@ public class ApigeeProbeRunner {
         public String recommended;
         public long durationMs;
         public Instant ranAt = Instant.now();
+
+        // Helper constructors
+        public ProbeResult(boolean passed, String message, String extra) {
+            this.passed = passed;
+            this.evidence = message;
+        }
+        // For builder
+        private ProbeResult() {}
 
         public String toMessageJson() {
             try {
@@ -418,6 +403,7 @@ public class ApigeeProbeRunner {
         }
 
         public static Builder builder() { return new Builder(); }
+
         public static final class Builder {
             private final ProbeResult r = new ProbeResult();
             public Builder name(String v)        { r.name = v; return this; }

@@ -42,6 +42,16 @@ public class SubmitOwaspScanRequest {
     @JsonProperty("requestedBy")
     private String requestedBy;
 
+    private String deployedEndpointUrl;
+
+    public String getDeployedEndpointUrl() {
+        return deployedEndpointUrl;
+    }
+
+    public void setDeployedEndpointUrl(String deployedEndpointUrl) {
+        this.deployedEndpointUrl = deployedEndpointUrl;
+    }
+
     public String getProjectName() {
         return projectName;
     }
