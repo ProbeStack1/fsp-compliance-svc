@@ -9,7 +9,6 @@ import com.probestack.forgesphere.model.SubmitOwaspScanRequest;
 import com.probestack.forgesphere.model.SubmitOwaspScanResponse;
 import com.probestack.forgesphere.model.ScanStatus;
 import com.probestack.forgesphere.model.ComplianceStatus;
-import com.probestack.forgesphere.model.ScanResult;
 import com.probestack.forgesphere.repository.OwaspScanRepository;
 import com.probestack.forgesphere.service.OnboardingResourceResolver.ResolvedOnboardingResource;
 import java.time.Instant;
@@ -71,13 +70,11 @@ public class OwaspScanService {
 
         List<SubmitOwaspScanResponse> scans;
         
-        // For APIGEE asset type, create direct scans without onboarding resolution
         if (AssetType.APIGEE.equals(request.getAssetType())) {
             scans = resourceIds.stream()
                     .map(resourceId -> submitDirectOwaspScan(request, resourceId))
                     .toList();
         } else {
-            // For other asset types (MICROSERVICE, KONG), resolve via onboarding
             scans = resourceIds.stream()
                     .map(resourceId -> onboardingResourceResolver.resolve(request.getAssetType(), resourceId))
                     .map(resource -> submitFromResolvedResource(request, resource))
@@ -127,6 +124,8 @@ public class OwaspScanService {
         document.setCreatedBy(request.getRequestedBy());
         document.setUpdatedDate(now);
         document.setUpdatedBy(request.getRequestedBy());
+        // Pass the deployed endpoint URL to the document
+        document.setDeployedEndpointUrl(request.getDeployedEndpointUrl());
         return document;
     }
 
@@ -143,6 +142,7 @@ public class OwaspScanService {
         scanRequest.setRules(request.getRules());
         scanRequest.setScanOptions(request.getScanOptions());
         scanRequest.setRequestedBy(request.getRequestedBy());
+        scanRequest.setDeployedEndpointUrl(request.getDeployedEndpointUrl());
 
         OwaspScanDocument savedScan = owaspScanRepository.save(mapToDocument(scanRequest));
         owaspScanProcessor.processScan(savedScan.getScanId());
@@ -156,11 +156,7 @@ public class OwaspScanService {
         scanRequest.setAssetId(resourceId);
         scanRequest.setAssetName(resourceId);
         scanRequest.setAssetType(request.getAssetType());
-        // Build a synthetic ScanSource pointing at the Apigee proxy export
-        // endpoint so the scanner has a non-null source and the rules run.
-        // The scanner only checks that source.archiveDownloadUrl is set; it
-        // does not currently fetch the bundle, so a stable, well-formed URL
-        // is sufficient and survives until a real bundle fetcher lands.
+
         com.probestack.forgesphere.model.ScanSource source = new com.probestack.forgesphere.model.ScanSource();
         String envOrg = System.getenv("FORGESPHERE_DEFAULT_APIGEE_ORG");
         String org = (envOrg != null && !envOrg.isBlank()) ? envOrg : "gen-ai-poc-onboarding";
@@ -173,6 +169,7 @@ public class OwaspScanService {
         scanRequest.setRules(request.getRules());
         scanRequest.setScanOptions(request.getScanOptions());
         scanRequest.setRequestedBy(request.getRequestedBy());
+        scanRequest.setDeployedEndpointUrl(request.getDeployedEndpointUrl());
 
         OwaspScanDocument savedScan = owaspScanRepository.save(mapToDocument(scanRequest));
         owaspScanProcessor.processScan(savedScan.getScanId());
@@ -194,18 +191,12 @@ public class OwaspScanService {
     }
 
     private void addAllIfPresent(Set<String> values, List<String> candidates) {
-        if (candidates == null) {
-            return;
-        }
-        candidates.stream()
-                .filter(this::isNotBlank)
-                .forEach(values::add);
+        if (candidates == null) return;
+        candidates.stream().filter(this::isNotBlank).forEach(values::add);
     }
 
     private void addIfPresent(Set<String> values, String candidate) {
-        if (isNotBlank(candidate)) {
-            values.add(candidate);
-        }
+        if (isNotBlank(candidate)) values.add(candidate);
     }
 
     private boolean isNotBlank(String value) {
