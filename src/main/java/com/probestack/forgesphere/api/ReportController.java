@@ -4,11 +4,15 @@ import com.probestack.forgesphere.model.CombinedReportResponse;
 import com.probestack.forgesphere.model.ComplianceScanDetailsResponse;
 import com.probestack.forgesphere.model.EmailReportRequest;
 import com.probestack.forgesphere.model.OwaspScanDetailsResponse;
+import com.probestack.forgesphere.service.MailService;
 import com.probestack.forgesphere.service.ReportService;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -53,11 +57,35 @@ public class ReportController {
         return ResponseEntity.ok(reportService.getCombinedReport(complianceScanId, owaspScanId));
     }
 
-    @PostMapping(value = "/governance/v1/reports/email", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<String> sendReportEmail(@Valid @RequestBody EmailReportRequest request) {
-        log.info("Processing sendReportEmail request");
-        boolean delivered = reportService.sendReport(request);
-        String message = delivered ? "Report email queued successfully." : "Mail sender is not configured. Report was not delivered.";
-        return ResponseEntity.accepted().body(message);
+    /**
+     * Send a compliance/OWASP/combined report by email.
+     *
+     * Returns a structured JSON body so the UI can render a crisp toast:
+     * <pre>{
+     *   "status": "SENT" | "EMAIL_DISABLED" | "FAILED",
+     *   "message": "human-readable summary"
+     * }</pre>
+     *
+     * The HTTP status code is always 200 for {@code SENT} and {@code EMAIL_DISABLED}
+     * (the operation completed — even when the transport was deliberately disabled);
+     * unexpected transport failures surface as 502.
+     */
+    @PostMapping(value = "/governance/v1/reports/email",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, Object>> sendReportEmail(@Valid @RequestBody EmailReportRequest request) {
+        log.info("Processing sendReportEmail request type={} to={}", request.getReportType(), request.getTo());
+        MailService.SendOutcome outcome = reportService.sendReport(request);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", outcome.status().name());
+        body.put("message", outcome.message());
+        body.put("to", request.getTo());
+        body.put("reportType", request.getReportType());
+
+        HttpStatus http = switch (outcome.status()) {
+            case SENT, EMAIL_DISABLED -> HttpStatus.OK;
+            case FAILED               -> HttpStatus.BAD_GATEWAY;
+        };
+        return ResponseEntity.status(http).body(body);
     }
 }

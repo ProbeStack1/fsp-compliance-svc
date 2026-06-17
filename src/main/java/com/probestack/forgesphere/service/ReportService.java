@@ -69,7 +69,7 @@ public class ReportService {
         return response;
     }
 
-    public boolean sendReport(EmailReportRequest request) {
+    public MailService.SendOutcome sendReport(EmailReportRequest request) {
         String reportBody = buildReportBody(request);
         return mailService.sendReport(request, reportBody);
     }
