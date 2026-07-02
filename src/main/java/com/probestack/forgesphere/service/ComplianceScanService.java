@@ -37,13 +37,16 @@ public class ComplianceScanService {
     private final ComplianceScanRepository complianceScanRepository;
     private final ComplianceScanProcessor complianceScanProcessor;
     private final OnboardingResourceResolver onboardingResourceResolver;
+    private final AuditLogService auditLogService;
 
     public ComplianceScanService(ComplianceScanRepository complianceScanRepository,
             ComplianceScanProcessor complianceScanProcessor,
-            OnboardingResourceResolver onboardingResourceResolver) {
+            OnboardingResourceResolver onboardingResourceResolver,
+            AuditLogService auditLogService) {
         this.complianceScanRepository = complianceScanRepository;
         this.complianceScanProcessor = complianceScanProcessor;
         this.onboardingResourceResolver = onboardingResourceResolver;
+        this.auditLogService = auditLogService;
     }
 
     public ResponseEntity<ComplianceScanDetailsResponse> getComplianceScanById(String scanId) {
@@ -56,6 +59,7 @@ public class ComplianceScanService {
     public ResponseEntity<SubmitComplianceScanResponse> submitComplianceScan(
             SubmitComplianceScanRequest submitComplianceScanRequest) {
         ComplianceScanDocument savedScan = complianceScanRepository.save(mapToDocument(submitComplianceScanRequest));
+        auditLogService.logComplianceScanCreate(savedScan);
         complianceScanProcessor.processScan(savedScan.getScanId());
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(mapToSubmitComplianceScanResponse(savedScan));
     }
@@ -148,6 +152,7 @@ public class ComplianceScanService {
         scanRequest.setRequestedBy(request.getRequestedBy());
 
         ComplianceScanDocument savedScan = complianceScanRepository.save(mapToDocument(scanRequest));
+        auditLogService.logComplianceScanCreate(savedScan);
         complianceScanProcessor.processScan(savedScan.getScanId());
         return mapToSubmitComplianceScanResponse(savedScan);
     }
