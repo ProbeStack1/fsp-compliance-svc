@@ -81,6 +81,7 @@ public class ComplianceScanProcessor {
         }
     }
 
+    // 🔥 MODIFIED – Added READY check along with ACTIVE
     private List<ComplianceRuleDocument> resolveRules(ComplianceScanDocument scan) {
         ScanRules requestedRules = scan.getRules();
         boolean includeInactive = scan.getScanOptions() != null
@@ -88,7 +89,8 @@ public class ComplianceScanProcessor {
 
         return complianceRuleRepository.findAllByAssetTypeOrderByDisplayOrderAsc(scan.getAssetType()).stream()
                 .filter(rule -> includeInactive
-                        || (RuleStatus.ACTIVE.equals(rule.getStatus()) && Boolean.TRUE.equals(rule.getEnabled())))
+                        || ((RuleStatus.ACTIVE.equals(rule.getStatus()) || RuleStatus.READY.equals(rule.getStatus()))
+                            && Boolean.TRUE.equals(rule.getEnabled())))
                 .filter(rule -> requestedRules == null || requestedRules.getRuleTypes() == null
                         || requestedRules.getRuleTypes().isEmpty()
                         || requestedRules.getRuleTypes().contains(rule.getRuleType()))

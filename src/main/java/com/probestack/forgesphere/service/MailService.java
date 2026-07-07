@@ -51,6 +51,56 @@ public class MailService {
         }
     }
 
+    // ✅ NEW METHOD – Send rule request email to approver
+    public SendOutcome sendRuleRequestEmail(String to, String ruleId, String ruleName, String requestedBy) {
+        String subject = "New Rule Request: " + ruleName;
+        String body = "ForgeSphere - New Rule Request\n\n" +
+                      "A new rule has been requested for approval.\n\n" +
+                      "Rule ID      : " + ruleId + "\n" +
+                      "Rule Name    : " + ruleName + "\n" +
+                      "Requested By : " + requestedBy + "\n\n" +
+                      "Please login to ForgeSphere Governance portal to approve or reject this request.\n\n" +
+                      "- ForgeSphere Governance Team";
+
+        // Use existing sendReport logic but with custom subject/body
+        if (javaMailSender == null) {
+            log.warn("Mail sender bean is not wired — email transport is unavailable. To: {}", to);
+            return SendOutcome.disabled("Mail sender bean is not configured.");
+        }
+        if (transportDisabled) {
+            log.info("Mail transport disabled (no SendGrid key). Skipping send for {}", to);
+            return SendOutcome.disabled("SendGrid API key is not configured. Set SENDGRID_API_KEY to enable email delivery.");
+        }
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(to);
+        message.setSubject(subject);
+        message.setText(body);
+        String from = (defaultFrom != null && !defaultFrom.isBlank()) ? defaultFrom : "noreply@forgesphere.probestack.io";
+        message.setFrom(from);
+
+        try {
+            javaMailSender.send(message);
+            log.info("Rule request email delivered to {}", to);
+            return SendOutcome.sent("Email sent to " + to);
+        } catch (MailException ex) {
+            String detail = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+            log.warn("SendGrid send failed for {}: {}", to, detail);
+            boolean looksLikeAuthFailure = detail.toLowerCase().contains("authentication")
+                    || detail.toLowerCase().contains("535")
+                    || detail.toLowerCase().contains("unauthorized")
+                    || detail.toLowerCase().contains("invalid login");
+            if (looksLikeAuthFailure) {
+                return SendOutcome.disabled("SendGrid rejected credentials: " + detail);
+            }
+            return SendOutcome.failed(detail);
+        } catch (RuntimeException ex) {
+            String detail = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+            log.warn("Unexpected email send failure for {}: {}", to, detail);
+            return SendOutcome.failed(detail);
+        }
+    }
+
     public SendOutcome sendReport(EmailReportRequest request, String reportBody) {
         if (javaMailSender == null) {
             log.warn("Mail sender bean is not wired — email transport is unavailable. To: {}", request.getTo());
@@ -77,8 +127,6 @@ public class MailService {
         } catch (MailException ex) {
             String detail = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
             log.warn("SendGrid send failed for {}: {}", request.getTo(), detail);
-            // Auth-style failures (bad/missing key) are treated as DISABLED so the UI
-            // shows a crisp "configure SendGrid" message rather than a generic error.
             boolean looksLikeAuthFailure = detail.toLowerCase().contains("authentication")
                     || detail.toLowerCase().contains("535")
                     || detail.toLowerCase().contains("unauthorized")

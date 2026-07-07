@@ -14,11 +14,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Seeds the default compliance rule catalog on application boot. Mirrors
- * {@link OwaspRuleSeeder} but for compliance/governance baseline checks.
- *
- * Rules are seeded per AssetType (MICROSERVICE, APIGEE, KONG) so the UI
- * "Asset Type" filter has something to show on day-one.
+ * Seeds the default compliance rule catalog on application boot.
+ * Rules are seeded only for MICROSERVICE (30 rules) so UI shows exactly 30 rules.
  */
 @Component
 public class ComplianceRuleSeeder {
@@ -33,12 +30,11 @@ public class ComplianceRuleSeeder {
 
     @EventListener(ApplicationReadyEvent.class)
     public void seedComplianceRules() {
-        for (AssetType assetType : AssetType.values()) {
-            for (DefaultRule defaultRule : DEFAULT_RULES) {
-                String ruleId = buildRuleId(assetType, defaultRule.code());
-                if (!complianceRuleRepository.existsByRuleId(ruleId)) {
-                    complianceRuleRepository.save(buildDocument(assetType, defaultRule, ruleId));
-                }
+        // ✅ Only MICROSERVICE – exactly 30 rules
+        for (DefaultRule defaultRule : DEFAULT_RULES) {
+            String ruleId = buildRuleId(AssetType.MICROSERVICE, defaultRule.code());
+            if (!complianceRuleRepository.existsByRuleId(ruleId)) {
+                complianceRuleRepository.save(buildDocument(AssetType.MICROSERVICE, defaultRule, ruleId));
             }
         }
     }
@@ -47,6 +43,7 @@ public class ComplianceRuleSeeder {
         return String.format("CR_%s_%s", assetType.name(), code);
     }
 
+    // ✅ MODIFIED – status = READY instead of ACTIVE
     private ComplianceRuleDocument buildDocument(AssetType assetType, DefaultRule rule, String ruleId) {
         Instant now = Instant.now();
         ComplianceRuleDocument doc = new ComplianceRuleDocument();
@@ -62,7 +59,7 @@ public class ComplianceRuleSeeder {
         doc.setMandatory(rule.mandatory());
         doc.setDisplayOrder(rule.displayOrder());
         doc.setIcon(rule.icon());
-        doc.setStatus(RuleStatus.ACTIVE);
+        doc.setStatus(RuleStatus.READY);  // 🔥 READY instead of ACTIVE
         doc.setImplementationKey("COMPLIANCE_" + ruleId);
         doc.setCreateDate(now);
         doc.setCreatedBy("system");

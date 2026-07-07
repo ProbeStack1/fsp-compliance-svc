@@ -58,8 +58,14 @@ public class ComplianceRulesApiController implements ComplianceRulesApi {
         }
     }
 
+    //  MODIFIED – status param type changed to String
     @Override()
-    public ResponseEntity<ComplianceRulesResponse> getComplianceRules(@Valid() @RequestParam(value = "projectName", required = false) String projectName, @Valid() @RequestParam(value = "resourceType", required = false) AssetType resourceType, @Valid() @RequestParam(value = "resourceName", required = false) String resourceName, @Valid() @RequestParam(value = "status", required = false) RuleStatus status, @Valid() @RequestParam(value = "ruleCategory", required = false) RuleCategory ruleCategory) {
+    public ResponseEntity<ComplianceRulesResponse> getComplianceRules(
+            @Valid() @RequestParam(value = "projectName", required = false) String projectName,
+            @Valid() @RequestParam(value = "resourceType", required = false) AssetType resourceType,
+            @Valid() @RequestParam(value = "resourceName", required = false) String resourceName,
+            @Valid() @RequestParam(value = "status", required = false) String status,
+            @Valid() @RequestParam(value = "ruleCategory", required = false) RuleCategory ruleCategory) {
         log.info("Processing getComplianceRules request");
         try {
             var response = complianceRulesService.getComplianceRules(projectName, resourceType, resourceName, status, ruleCategory);
