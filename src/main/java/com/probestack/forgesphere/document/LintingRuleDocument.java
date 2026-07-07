@@ -42,10 +42,15 @@ public class LintingRuleDocument {
     private Instant updatedDate;
     private String updatedBy;
 
-    // ✅ NEW FIELDS (same as compliance)
+    // NEW FIELDS (Approval tracking)
     private String approverEmail;
     private String approvedBy;
     private Instant approvedDate;
+
+    // NEW FIELDS (Linting specific)
+    private String scope;       // "internal" or "public"
+    private String field;       // e.g., "spring.datasource.url"
+    private String condition;   // "Available", "pattern [^[A-Z]]", etc.
 
     // Getters & Setters
     public String getId() { return id; }
@@ -113,4 +118,14 @@ public class LintingRuleDocument {
 
     public Instant getApprovedDate() { return approvedDate; }
     public void setApprovedDate(Instant approvedDate) { this.approvedDate = approvedDate; }
+
+    // NEW GETTERS/SETTERS
+    public String getScope() { return scope; }
+    public void setScope(String scope) { this.scope = scope; }
+
+    public String getField() { return field; }
+    public void setField(String field) { this.field = field; }
+
+    public String getCondition() { return condition; }
+    public void setCondition(String condition) { this.condition = condition; }
 }

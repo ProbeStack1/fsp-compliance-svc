@@ -20,6 +20,11 @@ public class ApproveRuleRequest {
     private String icon;
     private String implementationKey;  // Optional for Linting, required for Compliance
 
+    // NEW OVERRIDE FIELDS (for Linting rules)
+    private String scope;
+    private String field;
+    private String condition;
+
     // Getters & Setters
     public RuleStatus getStatus() { return status; }
     public void setStatus(RuleStatus status) { this.status = status; }
@@ -47,4 +52,14 @@ public class ApproveRuleRequest {
 
     public String getImplementationKey() { return implementationKey; }
     public void setImplementationKey(String implementationKey) { this.implementationKey = implementationKey; }
+
+    // NEW GETTERS/SETTERS
+    public String getScope() { return scope; }
+    public void setScope(String scope) { this.scope = scope; }
+
+    public String getField() { return field; }
+    public void setField(String field) { this.field = field; }
+
+    public String getCondition() { return condition; }
+    public void setCondition(String condition) { this.condition = condition; }
 }

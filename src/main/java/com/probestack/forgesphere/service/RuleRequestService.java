@@ -38,7 +38,11 @@ public class RuleRequestService {
         String ruleId = generateRuleId(request.getRuleType());
         Instant now = Instant.now();
 
-        // Create rule with REQUESTED status
+        // NEW FIELDS – extract from request
+        String scope = request.getScope();
+        String field = request.getField();
+        String condition = request.getCondition();
+
         if ("COMPLIANCE".equalsIgnoreCase(request.getRuleType())) {
             ComplianceRuleDocument doc = new ComplianceRuleDocument();
             doc.setRuleId(ruleId);
@@ -58,6 +62,10 @@ public class RuleRequestService {
             doc.setUpdatedBy(request.getCreatedBy());
             doc.setApproverEmail(request.getApproverEmail());
             doc.setDisplayOrder(0);
+            // NEW FIELDS
+            doc.setScope(scope);
+            doc.setField(field);
+            doc.setCondition(condition);
             complianceRuleRepository.save(doc);
         } else if ("LINTING".equalsIgnoreCase(request.getRuleType())) {
             LintingRuleDocument doc = new LintingRuleDocument();
@@ -78,6 +86,10 @@ public class RuleRequestService {
             doc.setUpdatedBy(request.getCreatedBy());
             doc.setApproverEmail(request.getApproverEmail());
             doc.setDisplayOrder(0);
+            // NEW FIELDS
+            doc.setScope(scope);
+            doc.setField(field);
+            doc.setCondition(condition);
             lintingRuleRepository.save(doc);
         } else {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid ruleType. Use COMPLIANCE or LINTING.");
@@ -132,7 +144,7 @@ public class RuleRequestService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status. Use READY or REJECTED.");
         }
 
-        // ✅ implementationKey is MANDATORY for Compliance
+        // implementationKey is MANDATORY for Compliance
         if (req.getImplementationKey() == null || req.getImplementationKey().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "implementationKey is required to activate a compliance rule.");
         }
@@ -144,6 +156,11 @@ public class RuleRequestService {
         if (req.getSeverity() != null) doc.setSeverity(req.getSeverity());
         if (req.getMandatory() != null) doc.setMandatory(req.getMandatory());
         if (req.getIcon() != null) doc.setIcon(req.getIcon());
+
+        // NEW OVERRIDE FIELDS (if admin wants to change)
+        if (req.getScope() != null) doc.setScope(req.getScope());
+        if (req.getField() != null) doc.setField(req.getField());
+        if (req.getCondition() != null) doc.setCondition(req.getCondition());
 
         doc.setImplementationKey(req.getImplementationKey());
         doc.setStatus(RuleStatus.READY);
@@ -173,7 +190,7 @@ public class RuleRequestService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status. Use READY or REJECTED.");
         }
 
-        // ✅ implementationKey is OPTIONAL for Linting – set default if not provided
+        // implementationKey is OPTIONAL for Linting – set default if not provided
         if (req.getImplementationKey() != null && !req.getImplementationKey().isBlank()) {
             doc.setImplementationKey(req.getImplementationKey());
         } else {
@@ -187,6 +204,11 @@ public class RuleRequestService {
         if (req.getSeverity() != null) doc.setSeverity(req.getSeverity());
         if (req.getMandatory() != null) doc.setMandatory(req.getMandatory());
         if (req.getIcon() != null) doc.setIcon(req.getIcon());
+
+        // ✅ NEW OVERRIDE FIELDS (for Linting)
+        if (req.getScope() != null) doc.setScope(req.getScope());
+        if (req.getField() != null) doc.setField(req.getField());
+        if (req.getCondition() != null) doc.setCondition(req.getCondition());
 
         doc.setStatus(RuleStatus.READY);
         doc.setEnabled(true);

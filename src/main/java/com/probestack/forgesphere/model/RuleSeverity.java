@@ -19,7 +19,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Gets or Sets RuleSeverity
  */
-@Generated(value = "org.openapitools.codegen.languages.SpringCodegen", date = "2026-05-13T05:38:50.494838724Z[GMT]")public enum RuleSeverity {
+@Generated(value = "org.openapitools.codegen.languages.SpringCodegen", date = "2026-05-13T05:38:50.494838724Z[GMT]")
+public enum RuleSeverity {
   
   REQUIRED("REQUIRED"),
   
@@ -27,7 +28,16 @@ import com.fasterxml.jackson.annotation.JsonValue;
   
   RECOMMENDED("RECOMMENDED"),
   
-  OPTIONAL("OPTIONAL");
+  OPTIONAL("OPTIONAL"),
+  
+  //  Linting severity levels
+  HINT("HINT"),
+  
+  WARN("WARN"),
+  
+  ERROR("ERROR"),
+  
+  INFO("INFO");
 
   private String value;
 

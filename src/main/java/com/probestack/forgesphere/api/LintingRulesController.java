@@ -65,7 +65,7 @@ public class LintingRulesController {
                         return RuleStatus.READY.equals(rule.getStatus()) || RuleStatus.ACTIVE.equals(rule.getStatus());
                     } else if ("requested".equalsIgnoreCase(status)) {
                         return RuleStatus.REQUESTED.equals(rule.getStatus());
-                    } else { // "all" or null
+                    } else {
                         return true;
                     }
                 })
@@ -91,7 +91,7 @@ public class LintingRulesController {
 
     /**
      * GET /governance/v1/linting-rules/ready
-     * Special endpoint for Senior's external service – returns only READY rules.
+     * Special endpoint for external service – returns only READY rules.
      */
     @GetMapping(value = "/governance/v1/linting-rules/ready", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<LintingRulesResponse> getReadyLintingRules(
@@ -101,6 +101,7 @@ public class LintingRulesController {
         return getLintingRules(assetType, "ready", null);
     }
 
+    // ✅ MODIFIED – added new fields mapping
     private LintingRule mapToLintingRule(LintingRuleDocument doc) {
         LintingRule rule = new LintingRule();
         rule.setRuleId(doc.getRuleId());
@@ -115,17 +116,24 @@ public class LintingRulesController {
         rule.setMandatory(doc.getMandatory());
         rule.setDisplayOrder(doc.getDisplayOrder());
         rule.setIcon(doc.getIcon());
-        // ACTIVE → READY mapping
+
         if (doc.getStatus() == RuleStatus.ACTIVE) {
             rule.setStatus(RuleStatus.READY);
         } else {
             rule.setStatus(doc.getStatus());
         }
+
         rule.setImplementationKey(doc.getImplementationKey());
         rule.setCreateDate(doc.getCreateDate() != null ? OffsetDateTime.ofInstant(doc.getCreateDate(), ZoneOffset.UTC) : null);
         rule.setCreatedBy(doc.getCreatedBy());
         rule.setUpdatedDate(doc.getUpdatedDate() != null ? OffsetDateTime.ofInstant(doc.getUpdatedDate(), ZoneOffset.UTC) : null);
         rule.setUpdatedBy(doc.getUpdatedBy());
+
+        // ✅ NEW MAPPING
+        rule.setScope(doc.getScope());
+        rule.setField(doc.getField());
+        rule.setCondition(doc.getCondition());
+
         return rule;
     }
 }
