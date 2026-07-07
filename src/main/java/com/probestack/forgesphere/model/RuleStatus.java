@@ -9,7 +9,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-
 import java.util.*;
 import jakarta.annotation.Generated;
 
@@ -19,11 +18,18 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /**
  * Gets or Sets RuleStatus
  */
-@Generated(value = "org.openapitools.codegen.languages.SpringCodegen", date = "2026-05-13T05:38:50.494838724Z[GMT]")public enum RuleStatus {
+@Generated(value = "org.openapitools.codegen.languages.SpringCodegen", date = "2026-05-13T05:38:50.494838724Z[GMT]")
+public enum RuleStatus {
   
-  ACTIVE("active"),
+  ACTIVE("ACTIVE"),
   
-  INACTIVE("inactive");
+  INACTIVE("INACTIVE"),
+  
+  READY("READY"),
+  
+  REQUESTED("REQUESTED"),
+  
+  REJECTED("REJECTED");
 
   private String value;
 
@@ -44,7 +50,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
   @JsonCreator
   public static RuleStatus fromValue(String value) {
     for (RuleStatus b : RuleStatus.values()) {
-      if (b.value.equalsIgnoreCase(value) || b.name().equalsIgnoreCase(value)) {
+      if (b.value.equals(value)) {
         return b;
       }
     }

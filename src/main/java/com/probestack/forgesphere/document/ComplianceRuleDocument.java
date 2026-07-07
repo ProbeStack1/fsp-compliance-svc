@@ -41,6 +41,11 @@ public class ComplianceRuleDocument {
     private String createdBy;
     private Instant updatedDate;
     private String updatedBy;
+    
+    //  NEW FIELDS
+    private String approverEmail;
+    private String approvedBy;
+    private Instant approvedDate;
 
     public String getId() {
         return id;
@@ -192,5 +197,30 @@ public class ComplianceRuleDocument {
 
     public void setUpdatedBy(String updatedBy) {
         this.updatedBy = updatedBy;
+    }
+
+    //  NEW GETTERS/SETTERS
+    public String getApproverEmail() {
+        return approverEmail;
+    }
+
+    public void setApproverEmail(String approverEmail) {
+        this.approverEmail = approverEmail;
+    }
+
+    public String getApprovedBy() {
+        return approvedBy;
+    }
+
+    public void setApprovedBy(String approvedBy) {
+        this.approvedBy = approvedBy;
+    }
+
+    public Instant getApprovedDate() {
+        return approvedDate;
+    }
+
+    public void setApprovedDate(Instant approvedDate) {
+        this.approvedDate = approvedDate;
     }
 }

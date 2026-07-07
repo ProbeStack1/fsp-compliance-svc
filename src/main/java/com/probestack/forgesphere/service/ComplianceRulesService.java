@@ -43,15 +43,29 @@ public class ComplianceRulesService {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // ✅ MODIFIED METHOD – status parameter changed from RuleStatus to String
     public ResponseEntity<ComplianceRulesResponse> getComplianceRules(String projectName,
-            AssetType resourceType, String resourceName, RuleStatus status,
+            AssetType resourceType, String resourceName, String status,
             RuleCategory ruleCategory) {
         AssetType assetType = resourceType == null ? AssetType.MICROSERVICE : resourceType;
         List<ComplianceRuleDocument> allRules = complianceRuleRepository.findAllByAssetTypeOrderByDisplayOrderAsc(assetType);
-        List<ComplianceRule> rules = allRules.stream()
-                .filter(rule -> status == null || status.equals(rule.getStatus()))
+        
+        // 🔥 Filter by status string
+        List<ComplianceRuleDocument> filtered = allRules.stream()
+                .filter(rule -> {
+                    if ("ready".equalsIgnoreCase(status)) {
+                        return RuleStatus.READY.equals(rule.getStatus()) || RuleStatus.ACTIVE.equals(rule.getStatus());
+                    } else if ("requested".equalsIgnoreCase(status)) {
+                        return RuleStatus.REQUESTED.equals(rule.getStatus());
+                    } else { // "all" or null
+                        return true;
+                    }
+                })
                 .filter(rule -> ruleCategory == null || ruleCategory.equals(rule.getCategory()))
                 .sorted(Comparator.comparing(ComplianceRuleDocument::getDisplayOrder, Comparator.nullsLast(Integer::compareTo)))
+                .toList();
+        
+        List<ComplianceRule> rules = filtered.stream()
                 .map(this::mapToComplianceRule)
                 .toList();
 
@@ -61,7 +75,8 @@ public class ComplianceRulesService {
         response.setResourceName(resourceName);
         response.setTotalRules(allRules.size());
         response.setActiveRules((int) allRules.stream()
-                .filter(rule -> RuleStatus.ACTIVE.equals(rule.getStatus()) && Boolean.TRUE.equals(rule.getEnabled()))
+                .filter(rule -> (RuleStatus.ACTIVE.equals(rule.getStatus()) || RuleStatus.READY.equals(rule.getStatus())) 
+                        && Boolean.TRUE.equals(rule.getEnabled()))
                 .count());
         response.setRules(rules);
         return ResponseEntity.ok(response);
@@ -119,6 +134,7 @@ public class ComplianceRulesService {
         return document;
     }
 
+    // ✅ MODIFIED MAPPING – ACTIVE → READY conversion
     private ComplianceRule mapToComplianceRule(ComplianceRuleDocument document) {
         ComplianceRule rule = new ComplianceRule();
         rule.setRuleId(document.getRuleId());
@@ -132,7 +148,14 @@ public class ComplianceRulesService {
         rule.setMandatory(document.getMandatory());
         rule.setDisplayOrder(document.getDisplayOrder());
         rule.setIcon(document.getIcon());
-        rule.setStatus(document.getStatus());
+        
+        // 🔥 ACTIVE → READY mapping for UI
+        if (document.getStatus() == RuleStatus.ACTIVE) {
+            rule.setStatus(RuleStatus.READY);
+        } else {
+            rule.setStatus(document.getStatus());
+        }
+        
         rule.setCreateDate(toOffsetDateTime(document.getCreateDate()));
         rule.setCreatedBy(document.getCreatedBy());
         rule.setUpdatedDate(toOffsetDateTime(document.getUpdatedDate()));
