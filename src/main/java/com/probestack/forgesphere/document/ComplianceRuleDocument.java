@@ -41,186 +41,91 @@ public class ComplianceRuleDocument {
     private String createdBy;
     private Instant updatedDate;
     private String updatedBy;
-    
-    //  NEW FIELDS
+
+    // NEW FIELDS (Approval tracking)
     private String approverEmail;
     private String approvedBy;
     private Instant approvedDate;
 
-    public String getId() {
-        return id;
-    }
+    // NEW FIELDS (Linting – but stored for compliance too for consistency)
+    private String scope;       // "internal" or "public"
+    private String field;       // e.g., "spring.datasource.url"
+    private String condition;   // "Available", "pattern [^[A-Z]]", etc.
 
-    public void setId(String id) {
-        this.id = id;
-    }
+    // Getters & Setters
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
-    public String getRuleId() {
-        return ruleId;
-    }
+    public String getRuleId() { return ruleId; }
+    public void setRuleId(String ruleId) { this.ruleId = ruleId; }
 
-    public void setRuleId(String ruleId) {
-        this.ruleId = ruleId;
-    }
+    public AssetType getAssetType() { return assetType; }
+    public void setAssetType(AssetType assetType) { this.assetType = assetType; }
 
-    public AssetType getAssetType() {
-        return assetType;
-    }
+    public String getRuleName() { return ruleName; }
+    public void setRuleName(String ruleName) { this.ruleName = ruleName; }
 
-    public void setAssetType(AssetType assetType) {
-        this.assetType = assetType;
-    }
+    public String getRuleDescription() { return ruleDescription; }
+    public void setRuleDescription(String ruleDescription) { this.ruleDescription = ruleDescription; }
 
-    public String getRuleName() {
-        return ruleName;
-    }
+    public RuleType getRuleType() { return ruleType; }
+    public void setRuleType(RuleType ruleType) { this.ruleType = ruleType; }
 
-    public void setRuleName(String ruleName) {
-        this.ruleName = ruleName;
-    }
+    public String getRuleOwner() { return ruleOwner; }
+    public void setRuleOwner(String ruleOwner) { this.ruleOwner = ruleOwner; }
 
-    public String getRuleDescription() {
-        return ruleDescription;
-    }
+    public RuleCategory getCategory() { return category; }
+    public void setCategory(RuleCategory category) { this.category = category; }
 
-    public void setRuleDescription(String ruleDescription) {
-        this.ruleDescription = ruleDescription;
-    }
+    public RuleSeverity getSeverity() { return severity; }
+    public void setSeverity(RuleSeverity severity) { this.severity = severity; }
 
-    public RuleType getRuleType() {
-        return ruleType;
-    }
+    public Boolean getEnabled() { return enabled; }
+    public void setEnabled(Boolean enabled) { this.enabled = enabled; }
 
-    public void setRuleType(RuleType ruleType) {
-        this.ruleType = ruleType;
-    }
+    public Boolean getMandatory() { return mandatory; }
+    public void setMandatory(Boolean mandatory) { this.mandatory = mandatory; }
 
-    public String getRuleOwner() {
-        return ruleOwner;
-    }
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
 
-    public void setRuleOwner(String ruleOwner) {
-        this.ruleOwner = ruleOwner;
-    }
+    public String getIcon() { return icon; }
+    public void setIcon(String icon) { this.icon = icon; }
 
-    public RuleCategory getCategory() {
-        return category;
-    }
+    public RuleStatus getStatus() { return status; }
+    public void setStatus(RuleStatus status) { this.status = status; }
 
-    public void setCategory(RuleCategory category) {
-        this.category = category;
-    }
+    public String getImplementationKey() { return implementationKey; }
+    public void setImplementationKey(String implementationKey) { this.implementationKey = implementationKey; }
 
-    public RuleSeverity getSeverity() {
-        return severity;
-    }
+    public Instant getCreateDate() { return createDate; }
+    public void setCreateDate(Instant createDate) { this.createDate = createDate; }
 
-    public void setSeverity(RuleSeverity severity) {
-        this.severity = severity;
-    }
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
 
-    public Boolean getEnabled() {
-        return enabled;
-    }
+    public Instant getUpdatedDate() { return updatedDate; }
+    public void setUpdatedDate(Instant updatedDate) { this.updatedDate = updatedDate; }
 
-    public void setEnabled(Boolean enabled) {
-        this.enabled = enabled;
-    }
+    public String getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 
-    public Boolean getMandatory() {
-        return mandatory;
-    }
+    public String getApproverEmail() { return approverEmail; }
+    public void setApproverEmail(String approverEmail) { this.approverEmail = approverEmail; }
 
-    public void setMandatory(Boolean mandatory) {
-        this.mandatory = mandatory;
-    }
+    public String getApprovedBy() { return approvedBy; }
+    public void setApprovedBy(String approvedBy) { this.approvedBy = approvedBy; }
 
-    public Integer getDisplayOrder() {
-        return displayOrder;
-    }
+    public Instant getApprovedDate() { return approvedDate; }
+    public void setApprovedDate(Instant approvedDate) { this.approvedDate = approvedDate; }
 
-    public void setDisplayOrder(Integer displayOrder) {
-        this.displayOrder = displayOrder;
-    }
+    // NEW GETTERS/SETTERS
+    public String getScope() { return scope; }
+    public void setScope(String scope) { this.scope = scope; }
 
-    public String getIcon() {
-        return icon;
-    }
+    public String getField() { return field; }
+    public void setField(String field) { this.field = field; }
 
-    public void setIcon(String icon) {
-        this.icon = icon;
-    }
-
-    public RuleStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(RuleStatus status) {
-        this.status = status;
-    }
-
-    public String getImplementationKey() {
-        return implementationKey;
-    }
-
-    public void setImplementationKey(String implementationKey) {
-        this.implementationKey = implementationKey;
-    }
-
-    public Instant getCreateDate() {
-        return createDate;
-    }
-
-    public void setCreateDate(Instant createDate) {
-        this.createDate = createDate;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public Instant getUpdatedDate() {
-        return updatedDate;
-    }
-
-    public void setUpdatedDate(Instant updatedDate) {
-        this.updatedDate = updatedDate;
-    }
-
-    public String getUpdatedBy() {
-        return updatedBy;
-    }
-
-    public void setUpdatedBy(String updatedBy) {
-        this.updatedBy = updatedBy;
-    }
-
-    //  NEW GETTERS/SETTERS
-    public String getApproverEmail() {
-        return approverEmail;
-    }
-
-    public void setApproverEmail(String approverEmail) {
-        this.approverEmail = approverEmail;
-    }
-
-    public String getApprovedBy() {
-        return approvedBy;
-    }
-
-    public void setApprovedBy(String approvedBy) {
-        this.approvedBy = approvedBy;
-    }
-
-    public Instant getApprovedDate() {
-        return approvedDate;
-    }
-
-    public void setApprovedDate(Instant approvedDate) {
-        this.approvedDate = approvedDate;
-    }
+    public String getCondition() { return condition; }
+    public void setCondition(String condition) { this.condition = condition; }
 }

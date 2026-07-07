@@ -28,6 +28,11 @@ public class SubmitRuleRequest {
     @NotBlank(message = "approverEmail is required")
     private String approverEmail;
 
+    // NEW FIELDS (Linting specific)
+    private String scope;       // "internal" or "public"
+    private String field;       // e.g., "spring.datasource.url"
+    private String condition;   // "Available", "pattern [^[A-Z]]", etc.
+
     // Getters & Setters
     public String getRuleType() { return ruleType; }
     public void setRuleType(String ruleType) { this.ruleType = ruleType; }
@@ -58,4 +63,13 @@ public class SubmitRuleRequest {
 
     public String getApproverEmail() { return approverEmail; }
     public void setApproverEmail(String approverEmail) { this.approverEmail = approverEmail; }
+
+    public String getScope() { return scope; }
+    public void setScope(String scope) { this.scope = scope; }
+
+    public String getField() { return field; }
+    public void setField(String field) { this.field = field; }
+
+    public String getCondition() { return condition; }
+    public void setCondition(String condition) { this.condition = condition; }
 }

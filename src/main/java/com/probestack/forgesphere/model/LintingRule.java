@@ -22,6 +22,11 @@ public class LintingRule {
     private OffsetDateTime updatedDate;
     private String updatedBy;
 
+    // NEW FIELDS
+    private String scope;
+    private String field;
+    private String condition;
+
     // Getters & Setters
     public String getRuleId() { return ruleId; }
     public void setRuleId(String ruleId) { this.ruleId = ruleId; }
@@ -76,4 +81,14 @@ public class LintingRule {
 
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
+
+    // NEW GETTERS/SETTERS
+    public String getScope() { return scope; }
+    public void setScope(String scope) { this.scope = scope; }
+
+    public String getField() { return field; }
+    public void setField(String field) { this.field = field; }
+
+    public String getCondition() { return condition; }
+    public void setCondition(String condition) { this.condition = condition; }
 }
