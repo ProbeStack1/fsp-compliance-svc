@@ -48,11 +48,12 @@ public class ProxyComplianceScanner {
         String liveUrl = liveEndpointResolver.resolve(scan);
         Path sourceRoot = null;
         Path tempDir = null;
+        Path zipPath = null;
         String sourceFailure = null;
 
         if (archiveUrl != null && !archiveUrl.isBlank()) {
             try {
-                Path zipPath = Files.createTempFile("proxy", ".zip");
+                zipPath = Files.createTempFile("proxy", ".zip");
                 HttpRequest request = HttpRequest.newBuilder().uri(URI.create(archiveUrl)).GET().build();
                 HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(zipPath));
                 if (response.statusCode() != 200) {
@@ -95,6 +96,9 @@ public class ProxyComplianceScanner {
         } finally {
             if (tempDir != null) {
                 try { deleteDirectory(tempDir); } catch (IOException ignored) { }
+            }
+            if (zipPath != null) {
+                try { Files.deleteIfExists(zipPath); } catch (IOException ignored) { }
             }
         }
         return results;

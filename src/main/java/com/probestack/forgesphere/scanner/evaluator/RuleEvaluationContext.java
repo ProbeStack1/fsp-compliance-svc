@@ -28,6 +28,7 @@ import java.util.stream.Stream;
 public class RuleEvaluationContext {
 
     private static final long MAX_FILE_BYTES = 1_000_000L;
+    private static final long MAX_CACHED_CONTENT_BYTES = 20_000_000L;
     private static final Pattern EXCLUDED_PATH = Pattern.compile(
             "(^|[\\\\/])(?:target|build|dist|node_modules|\\.git|\\.idea|\\.vscode)([\\\\/]|$)");
 
@@ -37,8 +38,8 @@ public class RuleEvaluationContext {
     private final String assetName;
     private final String scanId;
     private final List<Path> files;
-    private final Map<Path, String> contentCacheLower = new HashMap<>();
     private final Map<Path, String> contentCacheRaw = new HashMap<>();
+    private long cachedContentBytes;
 
     public RuleEvaluationContext(Path sourceRoot, String liveBaseUrl,
             AssetType assetType, String assetName, String scanId) {
@@ -91,7 +92,7 @@ public class RuleEvaluationContext {
                 .toList();
     }
 
-    /** Greps for a pattern across all files (case-insensitive search uses lowercased cache). */
+    /** Greps for a pattern across all files. */
     public Path firstContentMatch(Pattern pattern) {
         for (Path p : files) {
             if (pattern.matcher(contentLower(p)).find()) {
@@ -111,12 +112,23 @@ public class RuleEvaluationContext {
 
     /** Returns raw (case-preserved) content of a file or "" if unreadable. */
     public String readRaw(Path path) {
-        return contentCacheRaw.computeIfAbsent(path, this::readFile);
+        String cached = contentCacheRaw.get(path);
+        if (cached != null) {
+            return cached;
+        }
+
+        String content = readFile(path);
+        long estimatedBytes = content.length() * 2L;
+        if (cachedContentBytes + estimatedBytes <= MAX_CACHED_CONTENT_BYTES) {
+            contentCacheRaw.put(path, content);
+            cachedContentBytes += estimatedBytes;
+        }
+        return content;
     }
 
     /** Returns lowercased content (for case-insensitive grep). */
     public String contentLower(Path path) {
-        return contentCacheLower.computeIfAbsent(path, p -> readFile(p).toLowerCase(Locale.ROOT));
+        return readRaw(path).toLowerCase(Locale.ROOT);
     }
 
     public String relative(Path path) {

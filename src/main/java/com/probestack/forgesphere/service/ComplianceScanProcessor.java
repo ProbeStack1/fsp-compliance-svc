@@ -39,7 +39,7 @@ public class ComplianceScanProcessor {
         this.proxyComplianceScanner = proxyComplianceScanner;
     }
 
-    @Async
+    @Async("complianceScanTaskExecutor")
     public void processScan(String scanId) {
         complianceScanRepository.findByScanId(scanId).ifPresent(this::process);
     }

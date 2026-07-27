@@ -54,11 +54,12 @@ public class MicroserviceComplianceScanner {
         String liveUrl = liveEndpointResolver.resolve(scan);
         Path sourceRoot = null;
         Path tempDir = null;
+        Path zipPath = null;
         String sourceFailure = null;
 
         if (archiveUrl != null && !archiveUrl.isBlank()) {
             try {
-                Path zipPath = Files.createTempFile("source", ".zip");
+                zipPath = Files.createTempFile("source", ".zip");
                 HttpRequest request = HttpRequest.newBuilder().uri(URI.create(archiveUrl)).GET().build();
                 HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(zipPath));
                 if (response.statusCode() != 200) {
@@ -101,6 +102,9 @@ public class MicroserviceComplianceScanner {
         } finally {
             if (tempDir != null) {
                 try { deleteDirectory(tempDir); } catch (IOException ignored) { /* best-effort */ }
+            }
+            if (zipPath != null) {
+                try { Files.deleteIfExists(zipPath); } catch (IOException ignored) { /* best-effort */ }
             }
         }
         return results;
