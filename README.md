@@ -13,6 +13,7 @@ Generated Spring Boot application from OpenAPI specification.
 mvn clean install
 ```
 
+
 ## Running the Application
 ```bash
 mvn spring-boot:run
