@@ -27,15 +27,23 @@ import org.springframework.web.server.ResponseStatusException;
 public class OnboardingResourceResolver {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+    private static final String USER_EMAIL_HEADER = "X-User-Email";
+    private static final String USER_ROLE_HEADER = "X-User-Role";
 
     private final String onboardingBaseUrl;
+    private final String onboardingUserEmail;
+    private final String onboardingUserRole;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
     public OnboardingResourceResolver(
             @Value("${compliance.onboarding.base-url:https://forgesphere.probestack.io}") String onboardingBaseUrl,
+            @Value("${compliance.onboarding.user-email:system@forgesphere.probestack.io}") String onboardingUserEmail,
+            @Value("${compliance.onboarding.user-role:ORG_ADMIN}") String onboardingUserRole,
             ObjectMapper objectMapper) {
         this.onboardingBaseUrl = onboardingBaseUrl.replaceAll("/$", "");
+        this.onboardingUserEmail = onboardingUserEmail;
+        this.onboardingUserRole = onboardingUserRole;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
@@ -132,10 +140,15 @@ public class OnboardingResourceResolver {
     }
 
     private HttpResponse<String> sendGet(String url) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(REQUEST_TIMEOUT)
-                .GET()
-                .build();
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(url))
+                .timeout(REQUEST_TIMEOUT);
+        if (!isBlank(onboardingUserEmail)) {
+            requestBuilder.header(USER_EMAIL_HEADER, onboardingUserEmail);
+        }
+        if (!isBlank(onboardingUserRole)) {
+            requestBuilder.header(USER_ROLE_HEADER, onboardingUserRole);
+        }
+        HttpRequest request = requestBuilder.GET().build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
