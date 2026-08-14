@@ -10,6 +10,7 @@ import com.probestack.forgesphere.model.ScanStatus;
 import com.probestack.forgesphere.repository.LintScanRepository;
 import com.probestack.forgesphere.service.ComplianceThresholdService;
 import com.probestack.forgesphere.service.ResourceExemptionService;
+import com.probestack.forgesphere.service.ScanHistoryQueryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -59,16 +60,19 @@ public class LintScanController {
     private final LintScanRepository lintScanRepository;
     private final ComplianceThresholdService thresholdService;
     private final ResourceExemptionService exemptionService;
+    private final ScanHistoryQueryService scanHistoryQueryService;
     private final ObjectMapper objectMapper;
 
     @Autowired
     public LintScanController(LintScanRepository lintScanRepository,
             ComplianceThresholdService thresholdService,
             ResourceExemptionService exemptionService,
+            ScanHistoryQueryService scanHistoryQueryService,
             ObjectMapper objectMapper) {
         this.lintScanRepository = lintScanRepository;
         this.thresholdService = thresholdService;
         this.exemptionService = exemptionService;
+        this.scanHistoryQueryService = scanHistoryQueryService;
         this.objectMapper = objectMapper;
     }
 
@@ -121,28 +125,28 @@ public class LintScanController {
             @RequestParam(value = "projectName", required = false) String projectName,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
-        List<LintScanDocument> all = assetType == null
-                ? lintScanRepository.findAll()
-                : lintScanRepository.findAllByAssetTypeOrderByCreateDateDesc(assetType);
-        List<LintScanDocument> filtered = all.stream()
-                .filter(d -> projectName == null || projectName.equalsIgnoreCase(d.getProjectName()))
-                .sorted(Comparator.comparing(LintScanDocument::getCreateDate,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
+        // Matched, sorted and paged by Mongo, with the per-rule counts computed there — this used
+        // to read the whole collection per request. See ScanHistoryQueryService.
+        ScanHistoryQueryService.HistoryPage result = scanHistoryQueryService.page(
+                "governance_lint_scans", projectName, assetType, null, page, size);
 
-        int total = filtered.size();
-        int from = Math.max(0, Math.min(page * size, total));
-        int to = Math.max(0, Math.min(from + size, total));
         List<Map<String, Object>> items = new ArrayList<>();
-        for (LintScanDocument d : filtered.subList(from, to)) {
-            items.add(summary(d));
+        for (Map<String, Object> m : result.items()) {
+            AssetType at = m.get("assetType") == null ? null : parseAssetType(m.get("assetType"));
+            thresholdService.decorate(m, ScanKind.LINTING, at,
+                    ((Number) m.get("passed")).intValue(), ((Number) m.get("totalResults")).intValue());
+            exemptionService.decorate(m, ScanKind.LINTING, at, (String) m.get("assetName"));
+            items.add(m);
         }
+
+        int applied = result.size();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("type", "LINTING");
         body.put("page", page);
-        body.put("size", size);
-        body.put("total", total);
-        body.put("totalPages", size == 0 ? 0 : (int) Math.ceil((double) total / (double) size));
+        // Echoes what was applied, not what was asked for: the query service caps the page size.
+        body.put("size", applied);
+        body.put("total", result.total());
+        body.put("totalPages", (int) Math.ceil((double) result.total() / (double) applied));
         body.put("items", items);
         return ResponseEntity.ok(body);
     }

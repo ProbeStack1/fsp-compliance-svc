@@ -130,7 +130,20 @@ public class ComplianceThresholdService {
         long passed = results.stream()
                 .filter(r -> r != null && ScanResultStatus.PASSED.equals(r.getResult()))
                 .count();
-        return Optional.of((int) Math.round((passed * 100.0d) / results.size()));
+        return passRate((int) passed, results.size());
+    }
+
+    /**
+     * The same rate, from counts rather than from the results themselves.
+     *
+     * History reads compute these counts inside Mongo so the per-rule array never reaches the JVM;
+     * without this overload they would have to load it back just to divide two numbers.
+     */
+    public Optional<Integer> passRate(int passed, int total) {
+        if (total <= 0) {
+            return Optional.empty();
+        }
+        return Optional.of((int) Math.round((passed * 100.0d) / total));
     }
 
     /**
@@ -154,6 +167,17 @@ public class ComplianceThresholdService {
      */
     public Map<String, Object> decorate(Map<String, Object> summary, ScanKind scanKind,
             AssetType assetType, List<ScanResult> results) {
+        return decorate(summary, scanKind, assetType, passRate(results));
+    }
+
+    /** As above, from counts — see {@link #passRate(int, int)} for why both shapes exist. */
+    public Map<String, Object> decorate(Map<String, Object> summary, ScanKind scanKind,
+            AssetType assetType, int passed, int total) {
+        return decorate(summary, scanKind, assetType, passRate(passed, total));
+    }
+
+    private Map<String, Object> decorate(Map<String, Object> summary, ScanKind scanKind,
+            AssetType assetType, Optional<Integer> rate) {
         if (summary == null) {
             return new LinkedHashMap<>();
         }
@@ -161,7 +185,6 @@ public class ComplianceThresholdService {
         if (threshold.isEmpty()) {
             return summary;
         }
-        Optional<Integer> rate = passRate(results);
         if (rate.isEmpty()) {
             return summary;
         }

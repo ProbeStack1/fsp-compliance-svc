@@ -13,6 +13,7 @@ import com.probestack.forgesphere.repository.OwaspRuleRepository;
 import com.probestack.forgesphere.repository.OwaspScanRepository;
 import com.probestack.forgesphere.service.ComplianceThresholdService;
 import com.probestack.forgesphere.service.ResourceExemptionService;
+import com.probestack.forgesphere.service.ScanHistoryQueryService;
 import com.probestack.forgesphere.service.ReportService;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -58,6 +59,7 @@ public class GovernanceExtensionsController {
     private final ReportService reportService;
     private final ComplianceThresholdService thresholdService;
     private final ResourceExemptionService exemptionService;
+    private final ScanHistoryQueryService scanHistoryQueryService;
 
     @Autowired
     public GovernanceExtensionsController(
@@ -67,7 +69,8 @@ public class GovernanceExtensionsController {
             OwaspScanRepository owaspScanRepository,
             ReportService reportService,
             ComplianceThresholdService thresholdService,
-            ResourceExemptionService exemptionService) {
+            ResourceExemptionService exemptionService,
+            ScanHistoryQueryService scanHistoryQueryService) {
         this.complianceRuleRepository = complianceRuleRepository;
         this.owaspRuleRepository = owaspRuleRepository;
         this.complianceScanRepository = complianceScanRepository;
@@ -75,6 +78,7 @@ public class GovernanceExtensionsController {
         this.reportService = reportService;
         this.thresholdService = thresholdService;
         this.exemptionService = exemptionService;
+        this.scanHistoryQueryService = scanHistoryQueryService;
     }
 
     /* ─────────────────────────── Rule detail ────────────────────────── */
@@ -150,34 +154,11 @@ public class GovernanceExtensionsController {
         log.info("getComplianceScanHistory project={} asset={} requestedBy={} page={} size={}",
                 projectName, assetType, requestedBy, page, size);
 
-        // Fetch all (catalog size is small; in-memory filter is acceptable).
-        // For very large datasets we would add a paginated Mongo query — left
-        // as a follow-up since the existing repository only exposes Top12.
-        List<ComplianceScanDocument> all = complianceScanRepository.findAll();
-        List<ComplianceScanDocument> filtered = all.stream()
-                .filter(d -> projectName == null || projectName.equalsIgnoreCase(d.getProjectName()))
-                .filter(d -> assetType == null || assetType.equals(d.getAssetType()))
-                .filter(d -> requestedBy == null
-                        || requestedBy.equalsIgnoreCase(d.getCreatedBy())
-                        || requestedBy.equalsIgnoreCase(d.getUpdatedBy()))
-                .sorted(Comparator.comparing(ComplianceScanDocument::getCreateDate,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
-        int total = filtered.size();
-        int from = Math.max(0, Math.min(page * size, total));
-        int to = Math.max(0, Math.min(from + size, total));
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (ComplianceScanDocument d : filtered.subList(from, to)) {
-            items.add(scanHistorySummary(d));
-        }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("type", "COMPLIANCE");
-        body.put("page", page);
-        body.put("size", size);
-        body.put("total", total);
-        body.put("totalPages", size == 0 ? 0 : (int) Math.ceil((double) total / (double) size));
-        body.put("items", items);
-        return ResponseEntity.ok(body);
+        // Matched, sorted and paged by Mongo, with the per-rule counts computed there too. This
+        // used to be findAll() plus an in-memory sort, which loaded every stored scan — and every
+        // scan's results array — on each request. See ScanHistoryQueryService.
+        return historyBody("COMPLIANCE", ScanKind.COMPLIANCE, "governance_compliance_scans",
+                projectName, assetType, requestedBy, page, size);
     }
 
     @GetMapping(value = "/governance/v1/owasp-scans/history", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -189,31 +170,54 @@ public class GovernanceExtensionsController {
             @RequestParam(value = "size", defaultValue = "20") int size) {
         log.info("getOwaspScanHistory project={} asset={} requestedBy={} page={} size={}",
                 projectName, assetType, requestedBy, page, size);
-        List<OwaspScanDocument> all = owaspScanRepository.findAll();
-        List<OwaspScanDocument> filtered = all.stream()
-                .filter(d -> projectName == null || projectName.equalsIgnoreCase(d.getProjectName()))
-                .filter(d -> assetType == null || assetType.equals(d.getAssetType()))
-                .filter(d -> requestedBy == null
-                        || requestedBy.equalsIgnoreCase(d.getCreatedBy())
-                        || requestedBy.equalsIgnoreCase(d.getUpdatedBy()))
-                .sorted(Comparator.comparing(OwaspScanDocument::getCreateDate,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
-        int total = filtered.size();
-        int from = Math.max(0, Math.min(page * size, total));
-        int to = Math.max(0, Math.min(from + size, total));
+        return historyBody("OWASP", ScanKind.OWASP, "governance_owasp_scans",
+                projectName, assetType, requestedBy, page, size);
+    }
+
+    /**
+     * One page of scan history, in the shape every consumer of these routes already expects.
+     *
+     * `size` echoes what was actually applied rather than what was asked for — the query service
+     * caps it — so a client walking the pages can trust it to work out how many there are.
+     */
+    private ResponseEntity<Map<String, Object>> historyBody(String type, ScanKind kind, String collection,
+            String projectName, AssetType assetType, String requestedBy, int page, int size) {
+        ScanHistoryQueryService.HistoryPage result = scanHistoryQueryService.page(
+                collection, projectName, assetType, requestedBy, page, size);
+
         List<Map<String, Object>> items = new ArrayList<>();
-        for (OwaspScanDocument d : filtered.subList(from, to)) {
-            items.add(scanHistorySummaryOwasp(d));
+        for (Map<String, Object> m : result.items()) {
+            AssetType at = assetTypeOf(m.get("assetType"));
+            // Same two additive decorations as before; neither rewrites an existing field, and both
+            // do nothing at all when nothing is configured for this asset.
+            thresholdService.decorate(m, kind, at,
+                    ((Number) m.get("passed")).intValue(), ((Number) m.get("totalResults")).intValue());
+            exemptionService.decorate(m, kind, at, (String) m.get("assetName"));
+            items.add(m);
         }
+
+        long total = result.total();
+        int applied = result.size();
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("type", "OWASP");
+        body.put("type", type);
         body.put("page", page);
-        body.put("size", size);
+        body.put("size", applied);
         body.put("total", total);
-        body.put("totalPages", size == 0 ? 0 : (int) Math.ceil((double) total / (double) size));
+        body.put("totalPages", (int) Math.ceil((double) total / (double) applied));
         body.put("items", items);
         return ResponseEntity.ok(body);
+    }
+
+    /** The aggregation returns the stored string; AssetType.fromValue is lenient about unknowns. */
+    private AssetType assetTypeOf(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return AssetType.fromValue(String.valueOf(raw));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /* ─────────────────────────── Report download ────────────────────── */
@@ -266,52 +270,6 @@ public class GovernanceExtensionsController {
 
     private OffsetDateTime toOffset(java.time.Instant i) {
         return i == null ? null : OffsetDateTime.ofInstant(i, ZoneOffset.UTC);
-    }
-
-    private Map<String, Object> scanHistorySummary(ComplianceScanDocument d) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("scanId", d.getScanId());
-        m.put("projectName", d.getProjectName());
-        m.put("assetType", d.getAssetType());
-        m.put("assetName", d.getAssetName());
-        m.put("status", d.getStatus());
-        m.put("compliance", d.getCompliance());
-        m.put("totalResults", d.getScanResults() == null ? 0 : d.getScanResults().size());
-        m.put("passed", countByStatus(d.getScanResults(), com.probestack.forgesphere.model.ScanResultStatus.PASSED));
-        m.put("failed", countByStatus(d.getScanResults(), com.probestack.forgesphere.model.ScanResultStatus.FAILED));
-        m.put("createDate", toOffset(d.getCreateDate()));
-        m.put("createdBy", d.getCreatedBy());
-        // Adds passRate / threshold / complianceAtThreshold only where an enabled cut-off is
-        // configured for this (kind, assetType). With none configured the map is untouched, so
-        // consumers that do not use cut-offs see exactly the response they see today. The
-        // `compliance` value above is never rewritten.
-        thresholdService.decorate(m, ScanKind.COMPLIANCE, d.getAssetType(), d.getScanResults());
-        // Likewise additive: `exempted` and its provenance appear only for an asset that has been
-        // explicitly exempted. `compliance`, `status` and the per-rule results are never rewritten,
-        // so the record of what the scan actually found survives the decision to excuse it.
-        return exemptionService.decorate(m, ScanKind.COMPLIANCE, d.getAssetType(), d.getAssetName());
-    }
-
-    private Map<String, Object> scanHistorySummaryOwasp(OwaspScanDocument d) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("scanId", d.getScanId());
-        m.put("projectName", d.getProjectName());
-        m.put("assetType", d.getAssetType());
-        m.put("assetName", d.getAssetName());
-        m.put("status", d.getStatus());
-        m.put("compliance", d.getCompliance());
-        m.put("totalResults", d.getScanResults() == null ? 0 : d.getScanResults().size());
-        m.put("passed", countByStatus(d.getScanResults(), com.probestack.forgesphere.model.ScanResultStatus.PASSED));
-        m.put("failed", countByStatus(d.getScanResults(), com.probestack.forgesphere.model.ScanResultStatus.FAILED));
-        m.put("createDate", toOffset(d.getCreateDate()));
-        m.put("createdBy", d.getCreatedBy());
-        thresholdService.decorate(m, ScanKind.OWASP, d.getAssetType(), d.getScanResults());
-        return exemptionService.decorate(m, ScanKind.OWASP, d.getAssetType(), d.getAssetName());
-    }
-
-    private long countByStatus(List<ScanResult> results, com.probestack.forgesphere.model.ScanResultStatus status) {
-        if (results == null) return 0L;
-        return results.stream().filter(r -> r != null && status.equals(r.getResult())).count();
     }
 
     private Map<String, Object> buildComplianceImplementationBreakdown(ComplianceRuleDocument doc) {

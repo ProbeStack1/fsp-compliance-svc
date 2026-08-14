@@ -50,5 +50,14 @@ EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT}/compliance-api/actuator/health || exit 1
 
-# Run the application
-ENTRYPOINT ["sh", "-c", "java -jar -Dserver.port=${PORT} app.jar"]
+# Run the application.
+#
+# MaxRAMPercentage: without it the JVM defaults to 25% of the container, so a 512 MiB instance ran
+#   on a ~128 MB heap while the rest sat unused. 70% leaves room for metaspace, code cache, thread
+#   stacks and direct buffers, which are not counted in the heap but are counted by Cloud Run.
+# ExitOnOutOfMemoryError: an instance that has exhausted its heap cannot serve anything useful, and
+#   left alive it lingers behind the load balancer returning 502s. Exiting lets Cloud Run replace it.
+#
+# Deliberately no HeapDumpOnOutOfMemoryError: /tmp is a tmpfs here, so the dump would be written
+# into the very memory that just ran out.
+ENTRYPOINT ["sh", "-c", "java -XX:MaxRAMPercentage=70.0 -XX:+ExitOnOutOfMemoryError -jar -Dserver.port=${PORT} app.jar"]
