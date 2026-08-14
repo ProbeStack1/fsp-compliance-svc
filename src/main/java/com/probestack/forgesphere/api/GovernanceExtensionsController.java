@@ -5,11 +5,13 @@ import com.probestack.forgesphere.document.ComplianceScanDocument;
 import com.probestack.forgesphere.document.OwaspRuleDocument;
 import com.probestack.forgesphere.document.OwaspScanDocument;
 import com.probestack.forgesphere.model.AssetType;
+import com.probestack.forgesphere.model.ScanKind;
 import com.probestack.forgesphere.model.ScanResult;
 import com.probestack.forgesphere.repository.ComplianceRuleRepository;
 import com.probestack.forgesphere.repository.ComplianceScanRepository;
 import com.probestack.forgesphere.repository.OwaspRuleRepository;
 import com.probestack.forgesphere.repository.OwaspScanRepository;
+import com.probestack.forgesphere.service.ComplianceThresholdService;
 import com.probestack.forgesphere.service.ReportService;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -53,6 +55,7 @@ public class GovernanceExtensionsController {
     private final ComplianceScanRepository complianceScanRepository;
     private final OwaspScanRepository owaspScanRepository;
     private final ReportService reportService;
+    private final ComplianceThresholdService thresholdService;
 
     @Autowired
     public GovernanceExtensionsController(
@@ -60,12 +63,14 @@ public class GovernanceExtensionsController {
             OwaspRuleRepository owaspRuleRepository,
             ComplianceScanRepository complianceScanRepository,
             OwaspScanRepository owaspScanRepository,
-            ReportService reportService) {
+            ReportService reportService,
+            ComplianceThresholdService thresholdService) {
         this.complianceRuleRepository = complianceRuleRepository;
         this.owaspRuleRepository = owaspRuleRepository;
         this.complianceScanRepository = complianceScanRepository;
         this.owaspScanRepository = owaspScanRepository;
         this.reportService = reportService;
+        this.thresholdService = thresholdService;
     }
 
     /* ─────────────────────────── Rule detail ────────────────────────── */
@@ -272,7 +277,11 @@ public class GovernanceExtensionsController {
         m.put("failed", countByStatus(d.getScanResults(), com.probestack.forgesphere.model.ScanResultStatus.FAILED));
         m.put("createDate", toOffset(d.getCreateDate()));
         m.put("createdBy", d.getCreatedBy());
-        return m;
+        // Adds passRate / threshold / complianceAtThreshold only where an enabled cut-off is
+        // configured for this (kind, assetType). With none configured the map is untouched, so
+        // consumers that do not use cut-offs see exactly the response they see today. The
+        // `compliance` value above is never rewritten.
+        return thresholdService.decorate(m, ScanKind.COMPLIANCE, d.getAssetType(), d.getScanResults());
     }
 
     private Map<String, Object> scanHistorySummaryOwasp(OwaspScanDocument d) {
@@ -288,7 +297,7 @@ public class GovernanceExtensionsController {
         m.put("failed", countByStatus(d.getScanResults(), com.probestack.forgesphere.model.ScanResultStatus.FAILED));
         m.put("createDate", toOffset(d.getCreateDate()));
         m.put("createdBy", d.getCreatedBy());
-        return m;
+        return thresholdService.decorate(m, ScanKind.OWASP, d.getAssetType(), d.getScanResults());
     }
 
     private long countByStatus(List<ScanResult> results, com.probestack.forgesphere.model.ScanResultStatus status) {
