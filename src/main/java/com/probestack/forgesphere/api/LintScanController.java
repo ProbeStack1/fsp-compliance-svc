@@ -9,6 +9,7 @@ import com.probestack.forgesphere.model.ScanResultStatus;
 import com.probestack.forgesphere.model.ScanStatus;
 import com.probestack.forgesphere.repository.LintScanRepository;
 import com.probestack.forgesphere.service.ComplianceThresholdService;
+import com.probestack.forgesphere.service.ResourceExemptionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -57,14 +58,17 @@ public class LintScanController {
 
     private final LintScanRepository lintScanRepository;
     private final ComplianceThresholdService thresholdService;
+    private final ResourceExemptionService exemptionService;
     private final ObjectMapper objectMapper;
 
     @Autowired
     public LintScanController(LintScanRepository lintScanRepository,
             ComplianceThresholdService thresholdService,
+            ResourceExemptionService exemptionService,
             ObjectMapper objectMapper) {
         this.lintScanRepository = lintScanRepository;
         this.thresholdService = thresholdService;
+        this.exemptionService = exemptionService;
         this.objectMapper = objectMapper;
     }
 
@@ -167,7 +171,8 @@ public class LintScanController {
         m.put("failed", countByStatus(d.getScanResults(), ScanResultStatus.FAILED));
         m.put("createDate", toOffset(d.getCreateDate()));
         m.put("createdBy", d.getCreatedBy());
-        return thresholdService.decorate(m, ScanKind.LINTING, d.getAssetType(), d.getScanResults());
+        thresholdService.decorate(m, ScanKind.LINTING, d.getAssetType(), d.getScanResults());
+        return exemptionService.decorate(m, ScanKind.LINTING, d.getAssetType(), d.getAssetName());
     }
 
     private Map<String, Object> detail(LintScanDocument d) {

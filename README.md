@@ -78,6 +78,52 @@ Notes on the semantics:
 - **The verdict is computed at read time, not stored.** Raising or lowering a cut-off re-reads
   existing history rather than needing a migration or a re-scan.
 
+## Asset exemptions (opt-in)
+
+An exemption records that an asset's failures have been seen and consciously set aside — a
+governance decision, made after the scan, that can be lifted again without re-running anything.
+
+### If your team does not use exemptions, nothing changes
+
+Same guarantee as cut-offs above, and for the same reason. There is no default row, and
+`ResourceExemptionService.decorate` adds nothing at all when the asset has no exemption, so a
+caller who never creates one gets byte-for-byte identical responses.
+
+Critically, an exemption **never rewrites the scan**. `compliance`, `status` and `scanResults` are
+left exactly as the run produced them. The failure and the decision to excuse it are two separate
+facts, and both survive — a report that quietly turned failures into passes would be worthless as
+evidence, and any consumer ignoring `exempted` still sees the unvarnished scan.
+
+### Setting one
+
+```
+GET    /governance/v1/resource-exemptions?assetType=APIGEE[&scanKind=COMPLIANCE]
+PUT    /governance/v1/resource-exemptions/{scanKind}   { assetType, assetName, reason, updatedBy }
+DELETE /governance/v1/resource-exemptions/{scanKind}?assetType=APIGEE&assetName=my-proxy
+```
+
+`scanKind` is one of `COMPLIANCE`, `OWASP`, `LINTING`. Exemptions are scoped per kind on purpose:
+forgiving lint noise on a proxy must not quietly forgive its OWASP findings too.
+
+`PUT` is idempotent — exempting something already exempt refreshes who, when and why rather than
+failing on the unique index, so a client retrying after a dropped response is not punished for it.
+
+### What appears on scan history once set
+
+Four additive fields, alongside the untouched `compliance` and `status`:
+
+| Field | Meaning |
+| --- | --- |
+| `exempted` | `true`; absent entirely when the asset is not exempt |
+| `exemptionReason` | why, if one was given |
+| `exemptedBy` | who set it |
+| `exemptedAt` | when |
+
+How clients are expected to read them is a presentation choice, not a service one. The reference
+UI shows an exempted **failing** asset as "Exempted", and an exempted **passing** asset as its real
+verdict rendered inert — there is nothing to set aside, so the exemption is shown as doing nothing
+rather than dressed up as a second kind of pass.
+
 ## Cloud Run Deployment
 This generated project includes GitHub Actions CI/CD for Google Cloud Run.
 

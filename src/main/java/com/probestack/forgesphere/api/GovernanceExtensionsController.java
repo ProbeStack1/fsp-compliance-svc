@@ -12,6 +12,7 @@ import com.probestack.forgesphere.repository.ComplianceScanRepository;
 import com.probestack.forgesphere.repository.OwaspRuleRepository;
 import com.probestack.forgesphere.repository.OwaspScanRepository;
 import com.probestack.forgesphere.service.ComplianceThresholdService;
+import com.probestack.forgesphere.service.ResourceExemptionService;
 import com.probestack.forgesphere.service.ReportService;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -56,6 +57,7 @@ public class GovernanceExtensionsController {
     private final OwaspScanRepository owaspScanRepository;
     private final ReportService reportService;
     private final ComplianceThresholdService thresholdService;
+    private final ResourceExemptionService exemptionService;
 
     @Autowired
     public GovernanceExtensionsController(
@@ -64,13 +66,15 @@ public class GovernanceExtensionsController {
             ComplianceScanRepository complianceScanRepository,
             OwaspScanRepository owaspScanRepository,
             ReportService reportService,
-            ComplianceThresholdService thresholdService) {
+            ComplianceThresholdService thresholdService,
+            ResourceExemptionService exemptionService) {
         this.complianceRuleRepository = complianceRuleRepository;
         this.owaspRuleRepository = owaspRuleRepository;
         this.complianceScanRepository = complianceScanRepository;
         this.owaspScanRepository = owaspScanRepository;
         this.reportService = reportService;
         this.thresholdService = thresholdService;
+        this.exemptionService = exemptionService;
     }
 
     /* ─────────────────────────── Rule detail ────────────────────────── */
@@ -281,7 +285,11 @@ public class GovernanceExtensionsController {
         // configured for this (kind, assetType). With none configured the map is untouched, so
         // consumers that do not use cut-offs see exactly the response they see today. The
         // `compliance` value above is never rewritten.
-        return thresholdService.decorate(m, ScanKind.COMPLIANCE, d.getAssetType(), d.getScanResults());
+        thresholdService.decorate(m, ScanKind.COMPLIANCE, d.getAssetType(), d.getScanResults());
+        // Likewise additive: `exempted` and its provenance appear only for an asset that has been
+        // explicitly exempted. `compliance`, `status` and the per-rule results are never rewritten,
+        // so the record of what the scan actually found survives the decision to excuse it.
+        return exemptionService.decorate(m, ScanKind.COMPLIANCE, d.getAssetType(), d.getAssetName());
     }
 
     private Map<String, Object> scanHistorySummaryOwasp(OwaspScanDocument d) {
@@ -297,7 +305,8 @@ public class GovernanceExtensionsController {
         m.put("failed", countByStatus(d.getScanResults(), com.probestack.forgesphere.model.ScanResultStatus.FAILED));
         m.put("createDate", toOffset(d.getCreateDate()));
         m.put("createdBy", d.getCreatedBy());
-        return thresholdService.decorate(m, ScanKind.OWASP, d.getAssetType(), d.getScanResults());
+        thresholdService.decorate(m, ScanKind.OWASP, d.getAssetType(), d.getScanResults());
+        return exemptionService.decorate(m, ScanKind.OWASP, d.getAssetType(), d.getAssetName());
     }
 
     private long countByStatus(List<ScanResult> results, com.probestack.forgesphere.model.ScanResultStatus status) {
