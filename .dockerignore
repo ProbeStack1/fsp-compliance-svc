@@ -1,4 +1,5 @@
 target/
+!target/fsp-compliance-svc-*.jar
 .git/
 .github/
 .idea/
