@@ -1,5 +1,6 @@
 package com.probestack.forgesphere.api;
 
+import com.probestack.forgesphere.config.AuthenticatedCaller;
 import com.probestack.forgesphere.document.ResourceExemptionDocument;
 import com.probestack.forgesphere.model.AssetType;
 import com.probestack.forgesphere.model.ScanKind;
@@ -81,7 +82,9 @@ public class ResourceExemptionController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "assetName is required.");
         }
         String reason = text(request.get("reason"));
-        String actor = text(request.get("updatedBy"));
+        // The verified token's own email claim always wins when there is one — a client-supplied
+        // updatedBy field can't be trusted for "who approved this security exemption".
+        String actor = AuthenticatedCaller.email().orElseGet(() -> text(request.get("updatedBy")));
 
         try {
             ResourceExemptionDocument saved = exemptionService.exempt(kind, assetType, assetName, reason, actor);

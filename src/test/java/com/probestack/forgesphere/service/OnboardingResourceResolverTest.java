@@ -3,6 +3,7 @@ package com.probestack.forgesphere.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.probestack.forgesphere.config.ServiceTokenClient;
 import com.probestack.forgesphere.model.AssetType;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -34,11 +35,15 @@ class OnboardingResourceResolverTest {
         server.start();
 
         try {
+            // service-token disabled -> resolver uses the configured identity headers (this test's subject)
+            ServiceTokenClient serviceTokens = new ServiceTokenClient(
+                    false, "", "", "", "", "", "", new ObjectMapper());
             OnboardingResourceResolver resolver = new OnboardingResourceResolver(
                     "http://localhost:" + server.getAddress().getPort(),
                     "system@forgesphere.probestack.io",
                     "ORG_ADMIN",
-                    new ObjectMapper());
+                    new ObjectMapper(),
+                    serviceTokens);
 
             OnboardingResourceResolver.ResolvedOnboardingResource resource =
                     resolver.resolve(AssetType.MICROSERVICE, "6a7d9d5ba6ecca344572b551");

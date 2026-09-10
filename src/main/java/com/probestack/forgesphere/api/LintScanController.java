@@ -1,5 +1,6 @@
 package com.probestack.forgesphere.api;
 
+import com.probestack.forgesphere.config.AuthenticatedCaller;
 import com.probestack.forgesphere.document.LintScanDocument;
 import com.probestack.forgesphere.model.AssetType;
 import com.probestack.forgesphere.model.ComplianceStatus;
@@ -94,10 +95,14 @@ public class LintScanController {
                 ? new LintScanDocument()
                 : lintScanRepository.findByScanId(scanId).orElseGet(LintScanDocument::new);
 
+        // The verified token's own email claim always wins when there is one — a client-supplied
+        // createdBy field can't be trusted for "who ran this scan".
+        String actor = AuthenticatedCaller.email().orElseGet(() -> text(request.get("createdBy")));
+
         if (doc.getScanId() == null) {
             doc.setScanId(scanId != null ? scanId : "LINT-" + now.toEpochMilli() + "-" + Math.abs(assetName.hashCode()));
             doc.setCreateDate(now);
-            doc.setCreatedBy(text(request.get("createdBy")));
+            doc.setCreatedBy(actor);
         }
         doc.setProjectName(text(request.get("projectName")));
         doc.setCompanyName(text(request.get("companyName")));
@@ -112,7 +117,7 @@ public class LintScanController {
         doc.setCompliance(verdictOf(results, doc.getErrorMessage() != null));
         doc.setScanDate(now);
         doc.setUpdatedDate(now);
-        doc.setUpdatedBy(text(request.get("createdBy")));
+        doc.setUpdatedBy(actor);
 
         LintScanDocument saved = lintScanRepository.save(doc);
         log.info("lint scan recorded scanId={} asset={} results={}", saved.getScanId(), assetName, results.size());

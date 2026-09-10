@@ -1,5 +1,6 @@
 package com.probestack.forgesphere.api;
 
+import com.probestack.forgesphere.config.AuthenticatedCaller;
 import com.probestack.forgesphere.document.ComplianceThresholdDocument;
 import com.probestack.forgesphere.model.AssetType;
 import com.probestack.forgesphere.model.ScanKind;
@@ -88,7 +89,10 @@ public class ComplianceThresholdController {
         int threshold = parseThreshold(request.get("threshold"));
         // Absent means on: a caller writing a cut-off intends to use it. Send false to stage one.
         boolean enabled = request.get("enabled") == null || Boolean.parseBoolean(String.valueOf(request.get("enabled")));
-        String actor = request.get("updatedBy") == null ? null : String.valueOf(request.get("updatedBy"));
+        // The verified token's own email claim always wins when there is one — a client-supplied
+        // updatedBy field can't be trusted for "who made this change" on a compliance threshold.
+        String actor = AuthenticatedCaller.email()
+                .orElseGet(() -> request.get("updatedBy") == null ? null : String.valueOf(request.get("updatedBy")));
 
         try {
             ComplianceThresholdDocument saved = thresholdService.upsert(kind, assetType, threshold, enabled, actor);
