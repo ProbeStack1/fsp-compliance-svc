@@ -28,8 +28,9 @@ WORKDIR /app
 # Create a non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
 
-# Copy the built JAR from builder stage (as root, before switching user)
-COPY --from=builder /app/target/fsp-compliance-svc-*.jar app.jar
+# Copy the JAR built by the workflow's `mvn clean package` step (must run
+# before this Docker build step — see .github/workflows/deploy_prod.yml)
+COPY target/fsp-compliance-svc-*.jar app.jar
 
 # Change ownership to spring user
 RUN chown spring:spring app.jar

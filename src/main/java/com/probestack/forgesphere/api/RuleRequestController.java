@@ -1,5 +1,6 @@
 package com.probestack.forgesphere.api;
 
+import com.probestack.forgesphere.config.AuthenticatedCaller;
 import com.probestack.forgesphere.model.ApproveRuleRequest;
 import com.probestack.forgesphere.model.ApproveRuleRequestResponse;
 import com.probestack.forgesphere.model.SubmitRuleRequest;
@@ -36,6 +37,9 @@ public class RuleRequestController {
                  produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<SubmitRuleRequestResponse> submitRuleRequest(
             @Valid @RequestBody SubmitRuleRequest request) {
+        // The verified token's own email claim always wins when there is one — a client-supplied
+        // createdBy field can't be trusted for "who submitted this rule request".
+        AuthenticatedCaller.email().ifPresent(request::setCreatedBy);
         log.info("Received rule request: ruleType={}, ruleName={}, createdBy={}",
                 request.getRuleType(), request.getRuleName(), request.getCreatedBy());
         SubmitRuleRequestResponse response = ruleRequestService.submitRequest(request);
@@ -52,6 +56,9 @@ public class RuleRequestController {
     public ResponseEntity<ApproveRuleRequestResponse> approveRuleRequest(
             @PathVariable String ruleId,
             @Valid @RequestBody ApproveRuleRequest approveRequest) {
+        // The verified token's own email claim always wins when there is one — a client-supplied
+        // updatedBy field can't be trusted for "who approved/rejected this rule".
+        AuthenticatedCaller.email().ifPresent(approveRequest::setUpdatedBy);
         log.info("Approving request for ruleId: {} with status: {}", ruleId, approveRequest.getStatus());
         ApproveRuleRequestResponse response = ruleRequestService.approveRequest(ruleId, approveRequest);
         return ResponseEntity.ok(response);

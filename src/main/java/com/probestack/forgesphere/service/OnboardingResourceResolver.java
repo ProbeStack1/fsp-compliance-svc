@@ -2,6 +2,7 @@ package com.probestack.forgesphere.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.probestack.forgesphere.config.ServiceTokenClient;
 import com.probestack.forgesphere.model.AssetType;
 import com.probestack.forgesphere.model.ScanSource;
 import com.probestack.forgesphere.model.SourceType;
@@ -35,16 +36,19 @@ public class OnboardingResourceResolver {
     private final String onboardingUserRole;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final ServiceTokenClient serviceTokens;
 
     public OnboardingResourceResolver(
             @Value("${compliance.onboarding.base-url:https://forgesphere.probestack.io}") String onboardingBaseUrl,
             @Value("${compliance.onboarding.user-email:system@forgesphere.probestack.io}") String onboardingUserEmail,
             @Value("${compliance.onboarding.user-role:ORG_ADMIN}") String onboardingUserRole,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ServiceTokenClient serviceTokens) {
         this.onboardingBaseUrl = onboardingBaseUrl.replaceAll("/$", "");
         this.onboardingUserEmail = onboardingUserEmail;
         this.onboardingUserRole = onboardingUserRole;
         this.objectMapper = objectMapper;
+        this.serviceTokens = serviceTokens;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -140,13 +144,28 @@ public class OnboardingResourceResolver {
     }
 
     private HttpResponse<String> sendGet(String url) throws IOException, InterruptedException {
+        HttpResponse<String> response = sendGetOnce(url);
+        // "On 401, refresh once; then fail" — a rotated/expired service token is the one 401 a retry fixes.
+        if (response.statusCode() == 401 && serviceTokens.isEnabled()) {
+            serviceTokens.invalidate();
+            response = sendGetOnce(url);
+        }
+        return response;
+    }
+
+    private HttpResponse<String> sendGetOnce(String url) throws IOException, InterruptedException {
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(URI.create(url))
                 .timeout(REQUEST_TIMEOUT);
-        if (!isBlank(onboardingUserEmail)) {
-            requestBuilder.header(USER_EMAIL_HEADER, onboardingUserEmail);
-        }
-        if (!isBlank(onboardingUserRole)) {
-            requestBuilder.header(USER_ROLE_HEADER, onboardingUserRole);
+        if (serviceTokens.isEnabled()) {
+            // Service-to-service: this service authenticates as itself, not as a spoofed user.
+            requestBuilder.header("Authorization", "Bearer " + serviceTokens.getToken());
+        } else {
+            if (!isBlank(onboardingUserEmail)) {
+                requestBuilder.header(USER_EMAIL_HEADER, onboardingUserEmail);
+            }
+            if (!isBlank(onboardingUserRole)) {
+                requestBuilder.header(USER_ROLE_HEADER, onboardingUserRole);
+            }
         }
         HttpRequest request = requestBuilder.GET().build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
